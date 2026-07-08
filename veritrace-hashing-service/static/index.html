@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VeriTrace Hash Generator & Visual Sandbox</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="background-radial"></div>
+    <main class="main-container">
+        <header class="app-header">
+            <div class="logo-area">
+                <span class="logo-glow"></span>
+                <h1>VeriTrace</h1>
+                <span class="badge">SANDBOX</span>
+            </div>
+            <p class="subtitle">Extract SHA-256 cryptographic signatures and perceptual hashes for images and videos</p>
+        </header>
+
+        <section class="sandbox-card">
+            <div class="drop-zone" id="drop-zone">
+                <input type="file" id="file-input" class="hidden-input" accept="image/*,video/*">
+                <div class="upload-icon-wrapper">
+                    <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                </div>
+                <h3>Drag & Drop media here</h3>
+                <p>Supports PNG, JPG, JPEG, GIF, WEBP, MP4, WebM, MKV, MOV up to 50MB</p>
+                <button type="button" class="btn btn-primary" id="browse-btn">Browse Files</button>
+            </div>
+
+            <div class="processing-panel hidden" id="processing-panel">
+                <div class="loader-ring"></div>
+                <h4>Processing Media File...</h4>
+                <p>Computing SHA-256 signature and extracting visual hashes</p>
+            </div>
+
+            <div class="result-dashboard hidden" id="result-dashboard">
+                <div class="grid-split">
+                    <div class="preview-column">
+                        <div class="panel-header">
+                            <h3>Media Preview</h3>
+                        </div>
+                        <div class="preview-viewport" id="preview-viewport"></div>
+                    </div>
+
+                    <div class="results-column">
+                        <div class="panel-header">
+                            <h3>Analysis Hash Signatures</h3>
+                        </div>
+
+                        <div class="result-items">
+                            <div class="result-item">
+                                <div class="item-meta">
+                                    <label>Media Type</label>
+                                    <span class="media-badge" id="badge-media-type">Image</span>
+                                </div>
+                            </div>
+
+                            <div class="result-item">
+                                <div class="item-meta">
+                                    <label>Cryptographic SHA-256</label>
+                                    <div class="hash-field-wrapper">
+                                        <code class="hash-text" id="hash-sha256">0x...</code>
+                                        <button class="btn-copy" id="copy-sha256" title="Copy to clipboard">
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m-5 4h6m-6 4h6m-6 4h6"></path></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="result-item">
+                                <div class="item-meta">
+                                    <label>Representative Perceptual Hash (Decimal)</label>
+                                    <div class="hash-field-wrapper">
+                                        <code class="hash-text" id="hash-phash-dec">0</code>
+                                        <button class="btn-copy" id="copy-phash-dec" title="Copy to clipboard">
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m-5 4h6m-6 4h6m-6 4h6"></path></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="result-item">
+                                <div class="item-meta">
+                                    <label>Perceptual Hash (Hexadecimal)</label>
+                                    <div class="hash-field-wrapper">
+                                        <code class="hash-text" id="hash-phash-hex">0x0</code>
+                                        <button class="btn-copy" id="copy-phash-hex" title="Copy to clipboard">
+                                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m-5 4h6m-6 4h6m-6 4h6"></path></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="keyframes-section hidden" id="keyframes-section">
+                            <label class="section-label">Temporal Keyframe Hashes (1 FPS)</label>
+                            <div class="keyframes-timeline" id="keyframes-timeline"></div>
+                        </div>
+
+                        <div class="json-section">
+                            <div class="json-header">
+                                <label>Raw JSON Output</label>
+                                <button class="btn-text-copy" id="copy-json">Copy JSON</button>
+                            </div>
+                            <pre class="json-code"><code id="raw-json-code">{}</code></pre>
+                        </div>
+
+                        <div class="action-footer">
+                            <button type="button" class="btn btn-secondary" id="reset-btn">Reset Sandbox</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+    <script src="/app.js"></script>
+</body>
+</html>
