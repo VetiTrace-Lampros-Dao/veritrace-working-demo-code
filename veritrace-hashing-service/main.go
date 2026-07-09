@@ -110,17 +110,23 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 	mimeType := header.Header.Get("Content-Type")
 	isImg := strings.HasPrefix(mimeType, "image/")
 	isVid := strings.HasPrefix(mimeType, "video/")
+	isPdf := mimeType == "application/pdf"
+	isDocx := mimeType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || mimeType == "application/msword"
 
-	if !isImg && !isVid {
-		ext := strings.ToLower(filepath.Ext(header.Filename))
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if !isImg && !isVid && !isPdf && !isDocx {
 		if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".webp" {
 			isImg = true
 		} else if ext == ".mp4" || ext == ".avi" || ext == ".mkv" || ext == ".mov" || ext == ".webm" {
 			isVid = true
+		} else if ext == ".pdf" {
+			isPdf = true
+		} else if ext == ".docx" || ext == ".doc" {
+			isDocx = true
 		}
 	}
 
-	if !isImg && !isVid {
+	if !isImg && !isVid && !isPdf && !isDocx {
 		http.Error(w, "unsupported media type", http.StatusBadRequest)
 		return
 	}
@@ -156,61 +162,153 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	cmd := exec.Command("ffmpeg", "-i", tempFile.Name(), "-vf", "fps=1", filepath.Join(tempDir, "frame_%d.jpg"))
-	if err := cmd.Run(); err != nil {
-		http.Error(w, "ffmpeg processing failed: "+err.Error(), http.StatusInternalServerError)
-		return
+	if isDocx {
+		pdfName := strings.TrimSuffix(filepath.Base(tempFile.Name()), filepath.Ext(tempFile.Name())) + ".pdf"
+		cmd := exec.Command("libreoffice", "--headless", "--convert-to", "pdf", "--outdir", tempDir, tempFile.Name())
+		if err := cmd.Run(); err != nil {
+			http.Error(w, "failed to convert docx to pdf: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		convertedPdfPath := filepath.Join(tempDir, pdfName)
+		tempFile.Close()
+		tempFile, err = os.Open(convertedPdfPath)
+		if err != nil {
+			http.Error(w, "failed to open converted pdf: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		isPdf = true
 	}
 
-	files, err := os.ReadDir(tempDir)
-	if err != nil {
-		http.Error(w, "failed to read frames", http.StatusInternalServerError)
-		return
-	}
-
-	sort.Slice(files, func(i, j int) bool {
-		var numI, numJ int
-		_, _ = fmt.Sscanf(files[i].Name(), "frame_%d.jpg", &numI)
-		_, _ = fmt.Sscanf(files[j].Name(), "frame_%d.jpg", &numJ)
-		return numI < numJ
-	})
-
-	var keyframes []KeyframeResponse
-	for idx, f := range files {
-		framePath := filepath.Join(tempDir, f.Name())
-		fReader, err := os.Open(framePath)
-		if err != nil {
-			continue
-		}
-		img, _, err := image.Decode(fReader)
-		fReader.Close()
-		if err != nil {
-			continue
+	if isPdf {
+		cmd := exec.Command("pdftoppm", "-jpeg", "-r", "150", tempFile.Name(), filepath.Join(tempDir, "page"))
+		if err := cmd.Run(); err != nil {
+			http.Error(w, "failed to render PDF pages: "+err.Error(), http.StatusInternalServerError)
+			return
 		}
 
-		hash, err := goimagehash.PerceptionHash(img)
+		files, err := os.ReadDir(tempDir)
 		if err != nil {
-			continue
+			http.Error(w, "failed to read PDF pages: "+err.Error(), http.StatusInternalServerError)
+			return
 		}
 
-		keyframes = append(keyframes, KeyframeResponse{
-			Offset: uint64(idx),
-			PHash:  hash.GetHash(),
+		var pageFiles []string
+		for _, f := range files {
+			if strings.HasPrefix(f.Name(), "page-") && strings.HasSuffix(f.Name(), ".jpg") {
+				pageFiles = append(pageFiles, f.Name())
+			}
+		}
+
+		sort.Slice(pageFiles, func(i, j int) bool {
+			var numI, numJ int
+			_, _ = fmt.Sscanf(pageFiles[i], "page-%d.jpg", &numI)
+			_, _ = fmt.Sscanf(pageFiles[j], "page-%d.jpg", &numJ)
+			return numI < numJ
 		})
-	}
 
-	if len(keyframes) == 0 {
-		http.Error(w, "failed to extract keyframes", http.StatusInternalServerError)
+		var keyframes []KeyframeResponse
+		for _, f := range pageFiles {
+			var pageNum int
+			_, _ = fmt.Sscanf(f, "page-%d.jpg", &pageNum)
+
+			framePath := filepath.Join(tempDir, f)
+			fReader, err := os.Open(framePath)
+			if err != nil {
+				continue
+			}
+			img, _, err := image.Decode(fReader)
+			fReader.Close()
+			if err != nil {
+				continue
+			}
+
+			hash, err := goimagehash.PerceptionHash(img)
+			if err != nil {
+				continue
+			}
+
+			keyframes = append(keyframes, KeyframeResponse{
+				Offset: uint64(pageNum),
+				PHash:  hash.GetHash(),
+			})
+		}
+
+		if len(keyframes) == 0 {
+			http.Error(w, "failed to extract pages from document", http.StatusInternalServerError)
+			return
+		}
+
+		res := HashResponse{
+			SHA256:    sha256Hex,
+			PHash:     keyframes[0].PHash,
+			MediaType: "document",
+			Keyframes: keyframes,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(res)
 		return
 	}
 
-	res := HashResponse{
-		SHA256:    sha256Hex,
-		PHash:     keyframes[0].PHash,
-		MediaType: "video",
-		Keyframes: keyframes,
+	if isVid {
+		cmd := exec.Command("ffmpeg", "-i", tempFile.Name(), "-vf", "fps=1", filepath.Join(tempDir, "frame_%d.jpg"))
+		if err := cmd.Run(); err != nil {
+			http.Error(w, "ffmpeg processing failed: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		files, err := os.ReadDir(tempDir)
+		if err != nil {
+			http.Error(w, "failed to read frames", http.StatusInternalServerError)
+			return
+		}
+
+		sort.Slice(files, func(i, j int) bool {
+			var numI, numJ int
+			_, _ = fmt.Sscanf(files[i].Name(), "frame_%d.jpg", &numI)
+			_, _ = fmt.Sscanf(files[j].Name(), "frame_%d.jpg", &numJ)
+			return numI < numJ
+		})
+
+		var keyframes []KeyframeResponse
+		for idx, f := range files {
+			framePath := filepath.Join(tempDir, f.Name())
+			fReader, err := os.Open(framePath)
+			if err != nil {
+				continue
+			}
+			img, _, err := image.Decode(fReader)
+			fReader.Close()
+			if err != nil {
+				continue
+			}
+
+			hash, err := goimagehash.PerceptionHash(img)
+			if err != nil {
+				continue
+			}
+
+			keyframes = append(keyframes, KeyframeResponse{
+				Offset: uint64(idx),
+				PHash:  hash.GetHash(),
+			})
+		}
+
+		if len(keyframes) == 0 {
+			http.Error(w, "failed to extract keyframes", http.StatusInternalServerError)
+			return
+		}
+
+		res := HashResponse{
+			SHA256:    sha256Hex,
+			PHash:     keyframes[0].PHash,
+			MediaType: "video",
+			Keyframes: keyframes,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(res)
+		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(res)
 }

@@ -52,7 +52,14 @@ function App() {
   const processSelectedFile = (file) => {
     setSelectedFile(file);
     setPreviewUrl(URL.createObjectURL(file));
-    setMediaType(file.type.startsWith('video/') ? 'video' : 'image');
+    
+    let type = 'image';
+    if (file.type.startsWith('video/')) {
+      type = 'video';
+    } else if (file.type === 'application/pdf' || file.name.endsWith('.pdf') || file.name.endsWith('.docx') || file.name.endsWith('.doc')) {
+      type = 'document';
+    }
+    setMediaType(type);
     setHashingResult(null);
     setRegistrationStep(0);
     setTxHash("");
@@ -97,7 +104,31 @@ function App() {
     try {
       setRegistrationStep(1);
       setRegistrationStep(2);
-      const mockIpfsCid = "Qm" + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      
+      const metadataPayload = {
+        sha256: hashingResult.sha256,
+        representative_phash: Number(hashingResult.phash),
+        keyframes: (hashingResult.keyframes || []).map(kf => ({
+          offset: Number(kf.offset),
+          phash: Number(kf.phash)
+        }))
+      };
+
+      const pinResponse = await fetch("http://localhost:8080/api/v1/pin", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(metadataPayload)
+      });
+
+      if (!pinResponse.ok) {
+        const errorText = await pinResponse.text();
+        throw new Error(`Failed to pin metadata to IPFS: ${errorText}`);
+      }
+
+      const pinData = await pinResponse.json();
+      const ipfsCid = pinData.ipfs_cid;
 
       setRegistrationStep(3);
 
@@ -118,7 +149,7 @@ function App() {
       const formattedSha256 = hashingResult.sha256;
       const phashVal = BigInt(hashingResult.phash);
 
-      const tx = await contract.registerContent(formattedSha256, phashVal, mockIpfsCid, "DALL-E 3", gasOverrides);
+      const tx = await contract.registerContent(formattedSha256, phashVal, ipfsCid, "DALL-E 3", gasOverrides);
       setTxHash(tx.hash);
       setRegistrationStep(4);
 
@@ -129,6 +160,7 @@ function App() {
       setRegistrationStep(0);
     }
   };
+
 
   const executeVerification = () => {
     if (!hashingResult) return;
@@ -215,13 +247,13 @@ function App() {
                   id="sandbox-file"
                   className="hidden-input"
                   onChange={handleFileSelect}
-                  accept="image/*,video/*"
+                  accept="image/*,video/*,.pdf,.docx,.doc"
                 />
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
                 </svg>
                 <h3>Drag &amp; drop media file</h3>
-                <p>PNG, JPG, MP4, WebM up to 50MB</p>
+                <p>PNG, JPG, MP4, WebM, PDF, DOCX up to 50MB</p>
                 <button type="button" className="btn btn-secondary">Select File</button>
               </div>
             )}
@@ -231,6 +263,14 @@ function App() {
                 <div className="media-viewport">
                   {mediaType === 'video' ? (
                     <video src={previewUrl} controls autoPlay muted loop />
+                  ) : mediaType === 'document' ? (
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", minHeight: "200px", padding: "2rem", textAlign: "center" }}>
+                      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "64px", height: "64px", color: "#60a5fa" }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                      </svg>
+                      <h4 style={{ marginTop: "1rem", color: "#f3f4f6" }}>{selectedFile.name}</h4>
+                      <p style={{ color: "#9ca3af", fontSize: "0.85rem" }}>{(selectedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+                    </div>
                   ) : (
                     <img src={previewUrl} alt="Preview" />
                   )}
@@ -421,7 +461,11 @@ function App() {
                                   {verificationResult.timestamp_offset !== undefined && (
                                     <div className="meta-box">
                                       <span>Matched Offset</span>
-                                      <strong>{verificationResult.timestamp_offset} seconds</strong>
+                                      <strong>
+                                        {verificationResult.media_type === 'document'
+                                          ? `Page ${verificationResult.timestamp_offset}`
+                                          : `${verificationResult.timestamp_offset} seconds`}
+                                      </strong>
                                     </div>
                                   )}
                                   <div className="meta-box">

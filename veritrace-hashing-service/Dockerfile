@@ -13,7 +13,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -o server .
 
 FROM alpine:3.19
 
-RUN apk add --no-cache ffmpeg libc6-compat
+RUN apk add --no-cache ffmpeg poppler-utils libreoffice libc6-compat
 
 WORKDIR /app
 
