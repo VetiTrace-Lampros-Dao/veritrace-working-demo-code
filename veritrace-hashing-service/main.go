@@ -180,56 +180,22 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isPdf {
-		cmd := exec.Command("pdftoppm", "-jpeg", "-r", "150", tempFile.Name(), filepath.Join(tempDir, "page"))
-		if err := cmd.Run(); err != nil {
-			http.Error(w, "failed to render PDF pages: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		files, err := os.ReadDir(tempDir)
-		if err != nil {
-			http.Error(w, "failed to read PDF pages: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		var pageFiles []string
-		for _, f := range files {
-			if strings.HasPrefix(f.Name(), "page-") && strings.HasSuffix(f.Name(), ".jpg") {
-				pageFiles = append(pageFiles, f.Name())
-			}
-		}
-
-		sort.Slice(pageFiles, func(i, j int) bool {
-			var numI, numJ int
-			_, _ = fmt.Sscanf(pageFiles[i], "page-%d.jpg", &numI)
-			_, _ = fmt.Sscanf(pageFiles[j], "page-%d.jpg", &numJ)
-			return numI < numJ
-		})
-
+		pageCount := getPDFPageCount(tempFile.Name())
 		var keyframes []KeyframeResponse
-		for _, f := range pageFiles {
-			var pageNum int
-			_, _ = fmt.Sscanf(f, "page-%d.jpg", &pageNum)
 
-			framePath := filepath.Join(tempDir, f)
-			fReader, err := os.Open(framePath)
-			if err != nil {
-				continue
-			}
-			img, _, err := image.Decode(fReader)
-			fReader.Close()
-			if err != nil {
-				continue
-			}
-
-			hash, err := goimagehash.PerceptionHash(img)
-			if err != nil {
-				continue
+		for pageNum := 1; pageNum <= pageCount; pageNum++ {
+			cmd := exec.Command("pdftotext", "-f", fmt.Sprintf("%d", pageNum), "-l", fmt.Sprintf("%d", pageNum), tempFile.Name(), "-")
+			out, err := cmd.Output()
+			var h uint64
+			if err != nil || len(strings.TrimSpace(string(out))) == 0 {
+				h = fnv1a64(fmt.Sprintf("page-%d-empty", pageNum))
+			} else {
+				h = simhash(string(out))
 			}
 
 			keyframes = append(keyframes, KeyframeResponse{
 				Offset: uint64(pageNum),
-				PHash:  hash.GetHash(),
+				PHash:  h,
 			})
 		}
 
@@ -238,9 +204,16 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		wholeCmd := exec.Command("pdftotext", tempFile.Name(), "-")
+		wholeOut, _ := wholeCmd.Output()
+		mainPHash := simhash(string(wholeOut))
+		if mainPHash == 0 {
+			mainPHash = keyframes[0].PHash
+		}
+
 		res := HashResponse{
 			SHA256:    sha256Hex,
-			PHash:     keyframes[0].PHash,
+			PHash:     mainPHash,
 			MediaType: "document",
 			Keyframes: keyframes,
 		}
@@ -311,4 +284,59 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+}
+
+func getPDFPageCount(pdfPath string) int {
+	cmd := exec.Command("pdfinfo", pdfPath)
+	out, err := cmd.Output()
+	if err != nil {
+		return 1
+	}
+	lines := strings.Split(string(out), "\n")
+	for _, line := range lines {
+		if strings.HasPrefix(line, "Pages:") {
+			var count int
+			_, err := fmt.Sscanf(line, "Pages: %d", &count)
+			if err == nil {
+				return count
+			}
+		}
+	}
+	return 1
+}
+
+func simhash(text string) uint64 {
+	words := strings.Fields(strings.ToLower(text))
+	if len(words) == 0 {
+		return 0
+	}
+
+	v := make([]int, 64)
+	for _, word := range words {
+		h := fnv1a64(word)
+		for i := 0; i < 64; i++ {
+			if (h & (1 << uint(i))) != 0 {
+				v[i]++
+			} else {
+				v[i]--
+			}
+		}
+	}
+
+	var fingerPrint uint64
+	for i := 0; i < 64; i++ {
+		if v[i] > 0 {
+			fingerPrint |= (1 << uint(i))
+		}
+	}
+	return fingerPrint
+}
+
+func fnv1a64(s string) uint64 {
+	var hash uint64 = 14695981039346656037
+	for i := 0; i < len(s); i++ {
+		hash ^= uint64(s[i])
+		hash *= 1099511628211
+	}
+	return hash
 }

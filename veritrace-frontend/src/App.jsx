@@ -37,6 +37,10 @@ function App() {
 
   const [verifying, setVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState(null);
+  const [allowAiTraining, setAllowAiTraining] = useState(false);
+  const [registeredMetadataUrl, setRegisteredMetadataUrl] = useState("");
+  const [registeredMediaIpfsUrl, setRegisteredMediaIpfsUrl] = useState("");
+  const [registeredMediaS3Url, setRegisteredMediaS3Url] = useState("");
 
   const handleFileDrop = (e) => {
     e.preventDefault();
@@ -93,6 +97,10 @@ function App() {
     setRegistrationStep(0);
     setTxHash("");
     setVerificationResult(null);
+    setAllowAiTraining(false);
+    setRegisteredMetadataUrl("");
+    setRegisteredMediaIpfsUrl("");
+    setRegisteredMediaS3Url("");
   };
 
   const executeRegistration = async () => {
@@ -103,11 +111,33 @@ function App() {
 
     try {
       setRegistrationStep(1);
+      
+      const fileFormData = new FormData();
+      fileFormData.append('file', selectedFile);
+
+      const fileUploadRes = await fetch("http://localhost:8080/api/v1/pin-file", {
+        method: "POST",
+        body: fileFormData
+      });
+
+      if (!fileUploadRes.ok) {
+        const errorText = await fileUploadRes.text();
+        throw new Error(`Failed to upload media file: ${errorText}`);
+      }
+
+      const fileUploadData = await fileUploadRes.json();
+      const mediaIpfsUrl = fileUploadData.media_ipfs_url;
+      const mediaS3Url = fileUploadData.media_s3_url;
+
       setRegistrationStep(2);
       
       const metadataPayload = {
         sha256: hashingResult.sha256,
         representative_phash: Number(hashingResult.phash),
+        media_ipfs_url: mediaIpfsUrl,
+        media_s3_url: mediaS3Url,
+        allow_ai_training: allowAiTraining,
+        media_type: mediaType,
         keyframes: (hashingResult.keyframes || []).map(kf => ({
           offset: Number(kf.offset),
           phash: Number(kf.phash)
@@ -154,6 +184,9 @@ function App() {
       setRegistrationStep(4);
 
       await tx.wait();
+      setRegisteredMetadataUrl(`https://gateway.pinata.cloud/ipfs/${ipfsCid}`);
+      setRegisteredMediaIpfsUrl(mediaIpfsUrl);
+      setRegisteredMediaS3Url(mediaS3Url);
       setRegistrationStep(5);
     } catch (err) {
       alert("Transaction failed: " + err.message);
@@ -382,6 +415,19 @@ function App() {
                       </div>
                     )}
 
+                    <div style={{ margin: "1.5rem 0", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <input
+                        type="checkbox"
+                        id="ai-training-consent"
+                        checked={allowAiTraining}
+                        onChange={(e) => setAllowAiTraining(e.target.checked)}
+                        style={{ width: "20px", height: "20px", cursor: "pointer" }}
+                      />
+                      <label htmlFor="ai-training-consent" style={{ color: "#e5e7eb", fontSize: "0.95rem", cursor: "pointer", fontWeight: "500" }}>
+                        Allow AI Model Training (Earn USDC Royalties)
+                      </label>
+                    </div>
+
                     <div style={{ marginTop: "1rem" }}>
                       {!isConnected ? (
                         <div style={{ textAlign: 'center' }}>
@@ -390,7 +436,57 @@ function App() {
                       ) : registrationStep > 0 && registrationStep < 5 ? (
                         <button className="btn btn-primary btn-disabled" disabled>Registering Content...</button>
                       ) : registrationStep === 5 ? (
-                        <button className="btn btn-success" onClick={() => setRegistrationStep(0)}>Register Another Content</button>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+                          <div className="registration-success-summary" style={{
+                            padding: "1.25rem",
+                            borderRadius: "12px",
+                            backgroundColor: "rgba(16, 185, 129, 0.1)",
+                            border: "1px solid rgba(16, 185, 129, 0.2)",
+                            textAlign: "left"
+                          }}>
+                            <h4 style={{ color: "#34d399", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "20px", height: "20px" }}>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                              </svg>
+                              Asset Registration Success!
+                            </h4>
+                            
+                             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", fontSize: "0.90rem" }}>
+                              <div>
+                                <span style={{ color: "#9ca3af", display: "block", fontSize: "0.8rem", marginBottom: "0.25rem" }}>Metadata IPFS JSON URL</span>
+                                {registeredMetadataUrl.includes("Mock") ? (
+                                  <span style={{ color: "#9ca3af", fontStyle: "italic", cursor: "help", fontSize: "0.85rem" }} title="IPFS upload failed, running in local fallback mode. File is fully preserved in local S3.">
+                                    Mock IPFS link (Local fallback active)
+                                  </span>
+                                ) : (
+                                  <a href={registeredMetadataUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#60a5fa", textDecoration: "underline", wordBreak: "break-all" }}>
+                                    {registeredMetadataUrl}
+                                  </a>
+                                )}
+                              </div>
+                              <div>
+                                <span style={{ color: "#9ca3af", display: "block", fontSize: "0.8rem", marginBottom: "0.25rem" }}>Raw Media IPFS URL</span>
+                                {registeredMediaIpfsUrl.includes("Mock") ? (
+                                  <span style={{ color: "#9ca3af", fontStyle: "italic", cursor: "help", fontSize: "0.85rem" }} title="IPFS upload failed, running in local fallback mode. File is fully preserved in local S3.">
+                                    Mock IPFS link (Local fallback active)
+                                  </span>
+                                ) : (
+                                  <a href={registeredMediaIpfsUrl} target="_blank" rel="noopener noreferrer" style={{ color: "#60a5fa", textDecoration: "underline", wordBreak: "break-all" }}>
+                                    {registeredMediaIpfsUrl}
+                                  </a>
+                                )}
+                              </div>
+                              <div>
+                                <span style={{ color: "#9ca3af", display: "block", fontSize: "0.8rem", marginBottom: "0.25rem" }}>Raw Media S3 CDN URL</span>
+                                <a href={registeredMediaS3Url} target="_blank" rel="noopener noreferrer" style={{ color: "#60a5fa", textDecoration: "underline", wordBreak: "break-all" }}>
+                                  {registeredMediaS3Url}
+                                </a>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <button className="btn btn-success" onClick={() => setRegistrationStep(0)}>Register Another Content</button>
+                        </div>
                       ) : (
                         <button className="btn btn-primary" onClick={executeRegistration}>
                           Commit Fingerprint to Arbitrum Sepolia
@@ -423,6 +519,30 @@ function App() {
                               </div>
                               <div className="outcome-body">
                                 <div>Cryptographic match successfully verified. This file is authentic and original.</div>
+                                
+                                <div style={{
+                                  margin: "1rem 0",
+                                  padding: "0.75rem",
+                                  borderRadius: "8px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.5rem",
+                                  fontSize: "0.85rem",
+                                  fontWeight: "600",
+                                  backgroundColor: verificationResult.record.AllowAiTraining ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                                  border: `1px solid ${verificationResult.record.AllowAiTraining ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+                                  color: verificationResult.record.AllowAiTraining ? "#34d399" : "#f87171"
+                                }}>
+                                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "16px", height: "16px" }}>
+                                    {verificationResult.record.AllowAiTraining ? (
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    ) : (
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                    )}
+                                  </svg>
+                                  <span>{verificationResult.record.AllowAiTraining ? "AI MODEL TRAINING AUTHORIZED (USDC Royalties Active)" : "AI MODEL TRAINING FORBIDDEN (No Scraping Allowed)"}</span>
+                                </div>
+
                                 <div className="outcome-meta-grid">
                                   <div className="meta-box">
                                     <span>Registrant Owner</span>
@@ -433,6 +553,65 @@ function App() {
                                   <div className="meta-box">
                                     <span>Similarity Match</span>
                                     <strong>{verificationResult.similarity.toFixed(2)}%</strong>
+                                  </div>
+                                </div>
+
+                                <div className="original-media-preview" style={{ marginTop: "1.25rem", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "1.25rem" }}>
+                                  <h4 style={{ color: "#e5e7eb", marginBottom: "0.75rem", fontSize: "0.85rem", fontWeight: "600" }}>Original Registered File Preview</h4>
+                                  <div className="media-viewport" style={{
+                                    width: "100%",
+                                    height: "180px",
+                                    overflow: "hidden",
+                                    borderRadius: "8px",
+                                    backgroundColor: "rgba(0,0,0,0.3)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    border: "1px solid rgba(255,255,255,0.05)"
+                                  }}>
+                                    {verificationResult.record.MediaType === 'video' ? (
+                                      <video src={verificationResult.record.MediaS3Url || verificationResult.record.MediaIpfsUrl} controls style={{ width: "100%", maxHeight: "180px" }} />
+                                    ) : verificationResult.record.MediaType === 'document' ? (
+                                      <div style={{ padding: "1.5rem", textAlign: "center" }}>
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "40px", height: "40px", color: "#60a5fa", margin: "0 auto" }}>
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                        </svg>
+                                        <div style={{ color: "#9ca3af", fontSize: "0.8rem", marginTop: "0.5rem" }}>Registered Document</div>
+                                      </div>
+                                    ) : (
+                                      <img src={verificationResult.record.MediaS3Url || verificationResult.record.MediaIpfsUrl} alt="Original Registered" style={{ width: "100%", height: "100%", objectFit: "contain", maxHeight: "180px" }} />
+                                    )}
+                                  </div>
+                                  <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+                                    <a
+                                      href={verificationResult.record.MediaS3Url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="btn btn-secondary"
+                                      style={{ flex: 1, textAlign: "center", fontSize: "0.75rem", padding: "0.4rem 0.75rem", textDecoration: "none", display: "inline-block" }}
+                                    >
+                                      View Original (S3)
+                                    </a>
+                                    {verificationResult.record.MediaIpfsUrl.includes("Mock") ? (
+                                      <button
+                                        className="btn btn-secondary"
+                                        style={{ flex: 1, fontSize: "0.75rem", padding: "0.4rem 0.75rem", opacity: 0.5, cursor: "not-allowed" }}
+                                        disabled
+                                        title="IPFS source is not available for this record (running in local fallback mode). Please check S3 Cache."
+                                      >
+                                        IPFS Source Offline
+                                      </button>
+                                    ) : (
+                                      <a
+                                        href={verificationResult.record.MediaIpfsUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="btn btn-secondary"
+                                        style={{ flex: 1, textAlign: "center", fontSize: "0.75rem", padding: "0.4rem 0.75rem", textDecoration: "none", display: "inline-block", borderColor: "#3b82f6" }}
+                                      >
+                                        Verify IPFS Source
+                                      </a>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -447,6 +626,30 @@ function App() {
                               </div>
                               <div className="outcome-body">
                                 <div>Fuzzy search matched visual hashes of registered parents. This file is a derivative/copy of a protected asset.</div>
+                                
+                                <div style={{
+                                  margin: "1rem 0",
+                                  padding: "0.75rem",
+                                  borderRadius: "8px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.5rem",
+                                  fontSize: "0.85rem",
+                                  fontWeight: "600",
+                                  backgroundColor: verificationResult.record.AllowAiTraining ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                                  border: `1px solid ${verificationResult.record.AllowAiTraining ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+                                  color: verificationResult.record.AllowAiTraining ? "#34d399" : "#f87171"
+                                }}>
+                                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "16px", height: "16px" }}>
+                                    {verificationResult.record.AllowAiTraining ? (
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    ) : (
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                    )}
+                                  </svg>
+                                  <span>{verificationResult.record.AllowAiTraining ? "AI MODEL TRAINING AUTHORIZED (USDC Royalties Active)" : "AI MODEL TRAINING FORBIDDEN (No Scraping Allowed)"}</span>
+                                </div>
+
                                 <div className="outcome-meta-grid">
                                   <div className="meta-box">
                                     <span>Original Parent</span>
@@ -471,6 +674,66 @@ function App() {
                                   <div className="meta-box">
                                     <span>Attribution Engine</span>
                                     <strong>{verificationResult.record.AiTool || "N/A"}</strong>
+                                  </div>
+                                </div>
+
+                                <div className="original-media-preview" style={{ marginTop: "1.25rem", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "1.25rem" }}>
+                                  <h4 style={{ color: "#e5e7eb", marginBottom: "0.75rem", fontSize: "0.85rem", fontWeight: "600" }}>Original Registered Parent File Preview</h4>
+                                  <div className="media-viewport" style={{
+                                    width: "100%",
+                                    height: "180px",
+                                    overflow: "hidden",
+                                    borderRadius: "8px",
+                                    backgroundColor: "rgba(0,0,0,0.3)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    border: "1px solid rgba(255,255,255,0.05)"
+                                  }}>
+                                    {verificationResult.record.MediaType === 'video' ? (
+                                      <video src={verificationResult.record.MediaS3Url || verificationResult.record.MediaIpfsUrl} controls style={{ width: "100%", maxHeight: "180px" }} />
+                                    ) : verificationResult.record.MediaType === 'document' ? (
+                                      <div style={{ padding: "1.5rem", textAlign: "center" }}>
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "40px", height: "40px", color: "#60a5fa", margin: "0 auto" }}>
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                        </svg>
+                                        <div style={{ color: "#9ca3af", fontSize: "0.8rem", marginTop: "0.5rem" }}>Registered Document</div>
+                                      </div>
+                                    ) : (
+                                      <img src={verificationResult.record.MediaS3Url || verificationResult.record.MediaIpfsUrl} alt="Original Parent" style={{ width: "100%", height: "100%", objectFit: "contain", maxHeight: "180px" }} />
+                                    )}
+                                  </div>
+                                  
+                                  <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+                                    <a
+                                      href={verificationResult.record.MediaS3Url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="btn btn-secondary"
+                                      style={{ flex: 1, textAlign: "center", fontSize: "0.75rem", padding: "0.4rem 0.75rem", textDecoration: "none", display: "inline-block" }}
+                                    >
+                                      View Original (S3)
+                                    </a>
+                                    {verificationResult.record.MediaIpfsUrl.includes("Mock") ? (
+                                      <button
+                                        className="btn btn-secondary"
+                                        style={{ flex: 1, fontSize: "0.75rem", padding: "0.4rem 0.75rem", opacity: 0.5, cursor: "not-allowed" }}
+                                        disabled
+                                        title="IPFS source is not available for this record (running in local fallback mode). Please check S3 Cache."
+                                      >
+                                        IPFS Source Offline
+                                      </button>
+                                    ) : (
+                                      <a
+                                        href={verificationResult.record.MediaIpfsUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="btn btn-secondary"
+                                        style={{ flex: 1, textAlign: "center", fontSize: "0.75rem", padding: "0.4rem 0.75rem", textDecoration: "none", display: "inline-block", borderColor: "#3b82f6" }}
+                                      >
+                                        Verify IPFS Source
+                                      </a>
+                                    )}
                                   </div>
                                 </div>
                               </div>
