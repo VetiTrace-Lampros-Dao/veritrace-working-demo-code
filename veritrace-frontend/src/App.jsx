@@ -200,20 +200,42 @@ function App() {
     setVerifying(true);
     setVerificationResult(null);
 
+    // For documents and videos with keyframes, use segment-level verification.
+    const isSegmented = (mediaType === 'document' || mediaType === 'video') && hashingResult.keyframes && hashingResult.keyframes.length > 0;
+
     fetch(`http://localhost:8080/api/v1/verify/exact?hash=${hashingResult.sha256}`)
       .then(res => res.json())
       .then(exactRes => {
         if (exactRes.match_found) {
-          setVerificationResult(exactRes);
+          setVerificationResult({ ...exactRes, _resultType: 'exact' });
           setVerifying(false);
+        } else if (isSegmented) {
+          // Document or video: use segment-level endpoint
+          const segments = (hashingResult.keyframes || []).map(kf => ({
+            offset: Number(kf.offset),
+            phash: Number(kf.phash)
+          }));
+          fetch('http://localhost:8080/api/v1/verify/segments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sha256: hashingResult.sha256,
+              media_type: mediaType,
+              segments
+            })
+          })
+            .then(res => res.json())
+            .then(segRes => { setVerificationResult({ ...segRes, _resultType: 'segment' }); setVerifying(false); })
+            .catch(err => { alert('Segment verification error: ' + err.message); setVerifying(false); });
         } else {
+          // Image: use single fuzzy pHash
           fetch(`http://localhost:8080/api/v1/verify/fuzzy?phash=${hashingResult.phash}`)
             .then(res => res.json())
-            .then(fuzzyRes => { setVerificationResult(fuzzyRes); setVerifying(false); })
-            .catch(err => { alert("Fuzzy search error: " + err.message); setVerifying(false); });
+            .then(fuzzyRes => { setVerificationResult({ ...fuzzyRes, _resultType: 'fuzzy' }); setVerifying(false); })
+            .catch(err => { alert('Fuzzy search error: ' + err.message); setVerifying(false); });
         }
       })
-      .catch(err => { alert("Exact verification error: " + err.message); setVerifying(false); });
+      .catch(err => { alert('Exact verification error: ' + err.message); setVerifying(false); });
   };
 
   const renderHexHash = (val) => {

@@ -23,6 +23,7 @@ import (
 type KeyframeResponse struct {
 	Offset uint64 `json:"offset"`
 	PHash  uint64 `json:"phash"`
+	Text   string `json:"text,omitempty"`
 }
 
 type HashResponse struct {
@@ -187,15 +188,18 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 			cmd := exec.Command("pdftotext", "-f", fmt.Sprintf("%d", pageNum), "-l", fmt.Sprintf("%d", pageNum), tempFile.Name(), "-")
 			out, err := cmd.Output()
 			var h uint64
+			var pageText string
 			if err != nil || len(strings.TrimSpace(string(out))) == 0 {
 				h = fnv1a64(fmt.Sprintf("page-%d-empty", pageNum))
 			} else {
-				h = simhash(string(out))
+				pageText = string(out)
+				h = simhash(pageText)
 			}
 
 			keyframes = append(keyframes, KeyframeResponse{
 				Offset: uint64(pageNum),
 				PHash:  h,
+				Text:   pageText,
 			})
 		}
 
