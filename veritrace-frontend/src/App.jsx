@@ -35,6 +35,9 @@ function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [allowAiTraining, setAllowAiTraining] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState("");
+  const [parentSha256, setParentSha256] = useState("");
+  const [lineage, setLineage] = useState(null);
+  const [lineageLoading, setLineageLoading] = useState(false);
   const [hashingResult, setHashingResult] = useState(null);
 
   const [registrationStep, setRegistrationStep] = useState(0);
@@ -143,6 +146,7 @@ function App() {
         media_s3_url: mediaS3Url,
         allow_ai_training: allowAiTraining,
         webhook_url: webhookUrl,
+        parent_sha256: parentSha256,
         media_type: mediaType,
         keyframes: (hashingResult.keyframes || []).map(kf => ({
           offset: Number(kf.offset),
@@ -555,6 +559,27 @@ function App() {
                         />
                         <p style={{ fontSize: "0.8rem", color: "#9ca3af", marginTop: "0.25rem" }}>We will POST to this URL if someone verifies a matching asset.</p>
                       </div>
+
+                      {parentSha256 && (
+                        <div style={{ marginTop: "1rem", padding: "0.75rem 1rem", borderRadius: "8px", border: "1px solid rgba(99,102,241,0.5)", background: "rgba(99,102,241,0.1)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div>
+                              <p style={{ fontSize: "0.85rem", fontWeight: "700", color: "#a5b4fc", marginBottom: "0.25rem" }}>
+                                🔗 Registering as a Fork / Derivative
+                              </p>
+                              <p style={{ fontSize: "0.75rem", color: "#9ca3af" }}>
+                                Parent: <code style={{ color: "#818cf8" }}>{parentSha256.substring(0, 18)}...</code>
+                              </p>
+                              <p style={{ fontSize: "0.7rem", color: "#6b7280", marginTop: "0.2rem" }}>This asset will be linked to its parent in the provenance chain.</p>
+                            </div>
+                            <button
+                              onClick={() => setParentSha256("")}
+                              style={{ background: "none", border: "none", color: "#6b7280", cursor: "pointer", fontSize: "1rem", padding: "0", lineHeight: 1 }}
+                              title="Clear fork — register as original"
+                            >✕</button>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ marginTop: "1rem" }}>
@@ -826,7 +851,7 @@ function App() {
                                   </div>
                                 </div>
 
-                                <div style={{ marginTop: "1rem" }}>
+                                <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
                                   <button 
                                     className="btn btn-secondary" 
                                     style={{ width: "100%", padding: "0.5rem", fontSize: "0.85rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem" }}
@@ -834,6 +859,40 @@ function App() {
                                   >
                                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "16px", height: "16px" }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
                                     Download Parent Certificate
+                                  </button>
+
+                                  <button
+                                    className="btn btn-primary"
+                                    style={{ width: "100%", padding: "0.5rem", fontSize: "0.85rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem", background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
+                                    onClick={() => {
+                                      setParentSha256(verificationResult.record.Sha256Hash);
+                                      setActiveTab('register');
+                                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }}
+                                  >
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "16px", height: "16px" }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"></path></svg>
+                                    Register This as a Fork (Declare Derivative)
+                                  </button>
+
+                                  <button
+                                    className="btn btn-secondary"
+                                    style={{ width: "100%", padding: "0.5rem", fontSize: "0.85rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem", borderColor: "#6366f1", color: "#a5b4fc" }}
+                                    onClick={async () => {
+                                      setLineageLoading(true);
+                                      setLineage(null);
+                                      try {
+                                        const res = await fetch(`http://localhost:8080/api/v1/content/${verificationResult.record.Sha256Hash}/lineage`);
+                                        const data = await res.json();
+                                        setLineage(data);
+                                      } catch(e) {
+                                        setLineage({ error: e.message });
+                                      } finally {
+                                        setLineageLoading(false);
+                                      }
+                                    }}
+                                  >
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "16px", height: "16px" }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path></svg>
+                                    View Provenance Chain
                                   </button>
                                 </div>
 
@@ -912,6 +971,75 @@ function App() {
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+
+                    {/* Lineage Provenance Panel */}
+                    {(lineageLoading || lineage) && (
+                      <div style={{ marginTop: "1.5rem", borderRadius: "12px", border: "1px solid rgba(99, 102, 241, 0.4)", background: "rgba(99, 102, 241, 0.05)", padding: "1.25rem" }}>
+                        <h4 style={{ color: "#a5b4fc", fontSize: "0.9rem", fontWeight: "700", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "18px", height: "18px" }}>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"></path>
+                          </svg>
+                          Provenance Chain
+                          {lineage?.depth && <span style={{ fontSize: "0.75rem", color: "#6b7280", fontWeight: "400" }}>({lineage.depth} node{lineage.depth !== 1 ? 's' : ''})</span>}
+                        </h4>
+
+                        {lineageLoading && (
+                          <div style={{ display: "flex", justifyContent: "center", padding: "1rem" }}>
+                            <div style={{ width: "24px", height: "24px", border: "3px solid rgba(99,102,241,0.3)", borderTopColor: "#6366f1", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                          </div>
+                        )}
+
+                        {lineage?.error && (
+                          <div style={{ color: "#f87171", fontSize: "0.8rem" }}>Error: {lineage.error}</div>
+                        )}
+
+                        {lineage?.lineage && lineage.lineage.map((node, idx) => (
+                          <div key={idx} style={{ position: "relative" }}>
+                            <div style={{
+                              background: idx === 0 ? "rgba(99,102,241,0.15)" : "rgba(255,255,255,0.03)",
+                              border: idx === 0 ? "1px solid rgba(99,102,241,0.5)" : "1px solid rgba(255,255,255,0.08)",
+                              borderRadius: "8px",
+                              padding: "0.75rem 1rem",
+                              marginBottom: idx < lineage.lineage.length - 1 ? "0.25rem" : "0"
+                            }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+                                    <span style={{ fontSize: "0.7rem", padding: "0.1rem 0.5rem", borderRadius: "999px", fontWeight: "700",
+                                      background: idx === 0 ? "rgba(99,102,241,0.3)" : node.ParentSha256 ? "rgba(245,158,11,0.2)" : "rgba(16,185,129,0.2)",
+                                      color: idx === 0 ? "#a5b4fc" : node.ParentSha256 ? "#fbbf24" : "#34d399"
+                                    }}>
+                                      {idx === 0 ? "QUERIED" : node.ParentSha256 ? "FORK" : "ROOT ORIGINAL"}
+                                    </span>
+                                    <code style={{ fontSize: "0.75rem", color: "#9ca3af" }}>
+                                      {node.Sha256Hash?.substring(0, 14)}...
+                                    </code>
+                                  </div>
+                                  <div style={{ fontSize: "0.75rem", color: "#6b7280" }}>
+                                    Creator: <span style={{ color: "#9ca3af" }}>{node.CreatorAddress?.substring(0, 8)}...{node.CreatorAddress?.substring(38)}</span>
+                                  </div>
+                                  {node.ParentSha256 && (
+                                    <div style={{ fontSize: "0.7rem", color: "#6366f1", marginTop: "0.2rem" }}>
+                                      ↳ Fork of: <code>{node.ParentSha256.substring(0, 14)}...</code>
+                                    </div>
+                                  )}
+                                </div>
+                                <div style={{ fontSize: "0.7rem", color: "#6b7280", textAlign: "right", whiteSpace: "nowrap" }}>
+                                  {node.MediaType}
+                                </div>
+                              </div>
+                            </div>
+                            {idx < lineage.lineage.length - 1 && (
+                              <div style={{ display: "flex", justifyContent: "center", padding: "0.15rem 0" }}>
+                                <svg fill="none" stroke="#4b5563" viewBox="0 0 24 24" style={{ width: "16px", height: "16px" }}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </>
