@@ -31,8 +31,10 @@ function App() {
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
-  const [mediaType, setMediaType] = useState("");
+  const [mediaType, setMediaType] = useState("image");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [allowAiTraining, setAllowAiTraining] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState("");
   const [hashingResult, setHashingResult] = useState(null);
 
   const [registrationStep, setRegistrationStep] = useState(0);
@@ -40,7 +42,6 @@ function App() {
 
   const [verifying, setVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState(null);
-  const [allowAiTraining, setAllowAiTraining] = useState(false);
   const [registeredMetadataUrl, setRegisteredMetadataUrl] = useState("");
   const [registeredMediaIpfsUrl, setRegisteredMediaIpfsUrl] = useState("");
   const [registeredMediaS3Url, setRegisteredMediaS3Url] = useState("");
@@ -101,6 +102,7 @@ function App() {
     setTxHash("");
     setVerificationResult(null);
     setAllowAiTraining(false);
+    setWebhookUrl("");
     setRegisteredMetadataUrl("");
     setRegisteredMediaIpfsUrl("");
     setRegisteredMediaS3Url("");
@@ -140,6 +142,7 @@ function App() {
         media_ipfs_url: mediaIpfsUrl,
         media_s3_url: mediaS3Url,
         allow_ai_training: allowAiTraining,
+        webhook_url: webhookUrl,
         media_type: mediaType,
         keyframes: (hashingResult.keyframes || []).map(kf => ({
           offset: Number(kf.offset),
@@ -529,17 +532,29 @@ function App() {
                       </div>
                     )}
 
-                    <div style={{ margin: "1.5rem 0", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <input
-                        type="checkbox"
-                        id="ai-training-consent"
-                        checked={allowAiTraining}
-                        onChange={(e) => setAllowAiTraining(e.target.checked)}
-                        style={{ width: "20px", height: "20px", cursor: "pointer" }}
-                      />
-                      <label htmlFor="ai-training-consent" style={{ color: "#e5e7eb", fontSize: "0.95rem", cursor: "pointer", fontWeight: "500" }}>
+                    <div style={{ margin: "1.5rem 0" }}>
+                      <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.9rem", color: "#e5e7eb", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={allowAiTraining}
+                          onChange={(e) => setAllowAiTraining(e.target.checked)}
+                          style={{ width: "1rem", height: "1rem" }}
+                        />
                         Allow AI Model Training (Earn USDC Royalties)
                       </label>
+
+                      <div style={{ marginTop: "1rem" }}>
+                        <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", fontSize: "0.9rem", color: "#e5e7eb" }}>Notification Webhook URL (Optional)</label>
+                        <input 
+                          type="url" 
+                          placeholder="e.g., Discord or Zapier Webhook URL"
+                          className="form-control"
+                          value={webhookUrl}
+                          onChange={(e) => setWebhookUrl(e.target.value)}
+                          style={{ width: "100%", padding: "0.5rem", borderRadius: "4px", border: "1px solid #374151", backgroundColor: "#1f2937", color: "white" }}
+                        />
+                        <p style={{ fontSize: "0.8rem", color: "#9ca3af", marginTop: "0.25rem" }}>We will POST to this URL if someone verifies a matching asset.</p>
+                      </div>
                     </div>
 
                     <div style={{ marginTop: "1rem" }}>
