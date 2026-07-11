@@ -187,18 +187,16 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 		for pageNum := 1; pageNum <= pageCount; pageNum++ {
 			cmd := exec.Command("pdftotext", "-f", fmt.Sprintf("%d", pageNum), "-l", fmt.Sprintf("%d", pageNum), tempFile.Name(), "-")
 			out, err := cmd.Output()
-			var h uint64
-			var pageText string
 			if err != nil || len(strings.TrimSpace(string(out))) == 0 {
-				h = fnv1a64(fmt.Sprintf("page-%d-empty", pageNum))
-			} else {
-				pageText = string(out)
-				h = simhash(pageText)
+				continue
 			}
-
+			pageText := string(out)
+			if len(strings.Fields(pageText)) < 30 {
+				continue
+			}
 			keyframes = append(keyframes, KeyframeResponse{
 				Offset: uint64(pageNum),
-				PHash:  h,
+				PHash:  simhash(pageText),
 				Text:   pageText,
 			})
 		}

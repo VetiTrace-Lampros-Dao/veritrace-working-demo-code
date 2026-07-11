@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useWalletClient } from 'wagmi';
 import { ethers } from 'ethers';
+import { jsPDF } from 'jspdf';
+import './App.css';
 
 const CONTRACT_ADDRESS = "0x468edc5b2fe9d1c919f2377cbe0ccb16f32ead29";
 
@@ -23,6 +25,7 @@ const CONTRACT_ABI = [
 function App() {
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const walletAddress = address;
 
   const [activeTab, setActiveTab] = useState("register");
 
@@ -200,7 +203,6 @@ function App() {
     setVerifying(true);
     setVerificationResult(null);
 
-    // For documents and videos with keyframes, use segment-level verification.
     const isSegmented = (mediaType === 'document' || mediaType === 'video') && hashingResult.keyframes && hashingResult.keyframes.length > 0;
 
     fetch(`http://localhost:8080/api/v1/verify/exact?hash=${hashingResult.sha256}`)
@@ -210,7 +212,6 @@ function App() {
           setVerificationResult({ ...exactRes, _resultType: 'exact' });
           setVerifying(false);
         } else if (isSegmented) {
-          // Document or video: use segment-level endpoint
           const segments = (hashingResult.keyframes || []).map(kf => ({
             offset: Number(kf.offset),
             phash: Number(kf.phash)
@@ -228,7 +229,6 @@ function App() {
             .then(segRes => { setVerificationResult({ ...segRes, _resultType: 'segment' }); setVerifying(false); })
             .catch(err => { alert('Segment verification error: ' + err.message); setVerifying(false); });
         } else {
-          // Image: use single fuzzy pHash
           fetch(`http://localhost:8080/api/v1/verify/fuzzy?phash=${hashingResult.phash}`)
             .then(res => res.json())
             .then(fuzzyRes => { setVerificationResult({ ...fuzzyRes, _resultType: 'fuzzy' }); setVerifying(false); })
@@ -236,6 +236,98 @@ function App() {
         }
       })
       .catch(err => { alert('Exact verification error: ' + err.message); setVerifying(false); });
+  };
+
+  const downloadCertificate = (targetHash) => {
+    if (!targetHash) return;
+    
+    fetch(`http://localhost:8080/api/v1/verify/certificate?hash=${targetHash}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.error) {
+          alert('Error generating certificate: ' + data.error);
+          return;
+        }
+        
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `veritrace-certificate-${targetHash.substring(0, 8)}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      })
+      .catch(err => alert('Failed to download certificate: ' + err.message));
+  };
+
+  const generatePdfCertificate = (hash, creator, mediaS3, metadataIpfs, mediaIpfs, txHash) => {
+    if (!hash) return;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    doc.setFillColor(245, 247, 250);
+    doc.rect(0, 0, 297, 210, 'F');
+    doc.setDrawColor(30, 58, 138);
+    doc.setLineWidth(3);
+    doc.rect(10, 10, 277, 190, 'S');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(28);
+    doc.setTextColor(30, 58, 138);
+    doc.text('VeriTrace Registration Certificate', 148.5, 40, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(14);
+    doc.setTextColor(75, 85, 99);
+    doc.text('Certificate of Digital Provenance & Authenticity', 148.5, 50, { align: 'center' });
+
+    doc.setFontSize(12);
+    doc.setTextColor(0, 0, 0);
+    doc.text('This document certifies that the digital asset with SHA-256 hash:', 148.5, 75, { align: 'center' });
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text(hash, 148.5, 85, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(12);
+    doc.text('has been immutably registered on the blockchain by the creator address:', 148.5, 100, { align: 'center' });
+
+    doc.setFont('helvetica', 'bold');
+    doc.text(creator || 'Unknown', 148.5, 110, { align: 'center' });
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Registration Date: ${new Date().toLocaleDateString()}`, 148.5, 130, { align: 'center' });
+    
+    doc.setTextColor(37, 99, 235); // Blue links
+    let yPos = 145;
+    
+    if (txHash) {
+      doc.textWithLink('View Transaction on Arbiscan', 148.5, yPos, { url: `https://sepolia.arbiscan.io/tx/${txHash}`, align: 'center' });
+      yPos += 10;
+    }
+
+    if (mediaS3) {
+      doc.textWithLink('View Original Asset (S3 Storage)', 148.5, yPos, { url: mediaS3, align: 'center' });
+      yPos += 10;
+    }
+    
+    if (mediaIpfs && !mediaIpfs.includes("Mock")) {
+      doc.textWithLink('View Immutable Content (IPFS)', 148.5, yPos, { url: mediaIpfs, align: 'center' });
+      yPos += 10;
+    }
+
+    if (metadataIpfs && !metadataIpfs.includes("Mock")) {
+      doc.textWithLink('View Blockchain Metadata (IPFS JSON)', 148.5, yPos, { url: metadataIpfs, align: 'center' });
+    }
+
+    doc.setFontSize(9);
+    doc.setTextColor(156, 163, 175);
+    doc.text('VeriTrace Protocol - Secured by Arbitrum & IPFS', 148.5, 195, { align: 'center' });
+
+    doc.save(`VeriTrace-Certificate-${hash.substring(0,8)}.pdf`);
   };
 
   const renderHexHash = (val) => {
@@ -507,7 +599,16 @@ function App() {
                             </div>
                           </div>
                           
-                          <button className="btn btn-success" onClick={() => setRegistrationStep(0)}>Register Another Content</button>
+                          <button 
+                            className="btn btn-primary"
+                            onClick={() => generatePdfCertificate(hashingResult.sha256, walletAddress, registeredMediaS3Url, registeredMetadataUrl, registeredMediaIpfsUrl, txHash)}
+                            style={{ width: "100%", padding: "0.75rem", fontSize: "0.9rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem", backgroundColor: "#1e3a8a", borderColor: "#1e3a8a" }}
+                          >
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "18px", height: "18px" }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            Download Registration Certificate (PDF)
+                          </button>
+                          
+                          <button className="btn btn-secondary" onClick={() => setRegistrationStep(0)}>Register Another Content</button>
                         </div>
                       ) : (
                         <button className="btn btn-primary" onClick={executeRegistration}>
@@ -576,6 +677,17 @@ function App() {
                                     <span>Similarity Match</span>
                                     <strong>{verificationResult.similarity.toFixed(2)}%</strong>
                                   </div>
+                                </div>
+
+                                <div style={{ marginTop: "1rem" }}>
+                                  <button 
+                                    className="btn btn-primary" 
+                                    style={{ width: "100%", padding: "0.5rem", fontSize: "0.85rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem", backgroundColor: "#1e3a8a", borderColor: "#1e3a8a" }}
+                                    onClick={() => downloadCertificate(verificationResult.record.Sha256Hash)}
+                                  >
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "16px", height: "16px" }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                    Download Verification Certificate (JSON)
+                                  </button>
                                 </div>
 
                                 <div className="original-media-preview" style={{ marginTop: "1.25rem", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "1.25rem" }}>
@@ -697,6 +809,17 @@ function App() {
                                     <span>Attribution Engine</span>
                                     <strong>{verificationResult.record.AiTool || "N/A"}</strong>
                                   </div>
+                                </div>
+
+                                <div style={{ marginTop: "1rem" }}>
+                                  <button 
+                                    className="btn btn-secondary" 
+                                    style={{ width: "100%", padding: "0.5rem", fontSize: "0.85rem", display: "flex", justifyContent: "center", alignItems: "center", gap: "0.5rem" }}
+                                    onClick={() => downloadCertificate(verificationResult.record.Sha256Hash)}
+                                  >
+                                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "16px", height: "16px" }}><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                    Download Parent Certificate
+                                  </button>
                                 </div>
 
                                 <div className="original-media-preview" style={{ marginTop: "1.25rem", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "1.25rem" }}>
