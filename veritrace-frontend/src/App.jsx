@@ -7,6 +7,9 @@ import './App.css';
 
 const CONTRACT_ADDRESS = "0x468edc5b2fe9d1c919f2377cbe0ccb16f32ead29";
 
+const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || "http://localhost:8080";
+const HASH_API_URL = import.meta.env.VITE_HASH_API_URL || "http://localhost:8081";
+
 const CONTRACT_ABI = [
   {
     "inputs": [
@@ -80,7 +83,7 @@ function App() {
     const formData = new FormData();
     formData.append('file', file);
 
-    fetch('http://localhost:8081/api/v1/hash', { method: 'POST', body: formData })
+    fetch(`${HASH_API_URL}/api/v1/hash`, { method: 'POST', body: formData })
       .then(res => {
         if (!res.ok) return res.text().then(t => { throw new Error(t) });
         return res.json();
@@ -123,7 +126,7 @@ function App() {
       const fileFormData = new FormData();
       fileFormData.append('file', selectedFile);
 
-      const fileUploadRes = await fetch("http://localhost:8080/api/v1/pin-file", {
+      const fileUploadRes = await fetch(`${CORE_API_URL}/api/v1/pin-file`, {
         method: "POST",
         body: fileFormData
       });
@@ -154,7 +157,7 @@ function App() {
         }))
       };
 
-      const pinResponse = await fetch("http://localhost:8080/api/v1/pin", {
+      const pinResponse = await fetch(`${CORE_API_URL}/api/v1/pin`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -212,7 +215,7 @@ function App() {
 
     const isSegmented = (mediaType === 'document' || mediaType === 'video') && hashingResult.keyframes && hashingResult.keyframes.length > 0;
 
-    fetch(`http://localhost:8080/api/v1/verify/exact?hash=${hashingResult.sha256}`)
+    fetch(`${CORE_API_URL}/api/v1/verify/exact?hash=${hashingResult.sha256}`)
       .then(res => res.json())
       .then(exactRes => {
         if (exactRes.match_found) {
@@ -223,7 +226,7 @@ function App() {
             offset: Number(kf.offset),
             phash: Number(kf.phash)
           }));
-          fetch('http://localhost:8080/api/v1/verify/segments', {
+          fetch(`${CORE_API_URL}/api/v1/verify/segments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -236,7 +239,7 @@ function App() {
             .then(segRes => { setVerificationResult({ ...segRes, _resultType: 'segment' }); setVerifying(false); })
             .catch(err => { alert('Segment verification error: ' + err.message); setVerifying(false); });
         } else {
-          fetch(`http://localhost:8080/api/v1/verify/fuzzy?phash=${hashingResult.phash}`)
+          fetch(`${CORE_API_URL}/api/v1/verify/fuzzy?phash=${hashingResult.phash}`)
             .then(res => res.json())
             .then(fuzzyRes => { setVerificationResult({ ...fuzzyRes, _resultType: 'fuzzy' }); setVerifying(false); })
             .catch(err => { alert('Fuzzy search error: ' + err.message); setVerifying(false); });
@@ -248,7 +251,7 @@ function App() {
   const downloadCertificate = (targetHash) => {
     if (!targetHash) return;
     
-    fetch(`http://localhost:8080/api/v1/verify/certificate?hash=${targetHash}`)
+    fetch(`${CORE_API_URL}/api/v1/verify/certificate?hash=${targetHash}`)
       .then(res => res.json())
       .then(data => {
         if (data.error) {
@@ -881,7 +884,7 @@ function App() {
                                       setLineageLoading(true);
                                       setLineage(null);
                                       try {
-                                        const res = await fetch(`http://localhost:8080/api/v1/content/${verificationResult.record.Sha256Hash}/lineage`);
+                                        const res = await fetch(`${CORE_API_URL}/api/v1/content/${verificationResult.record.Sha256Hash}/lineage`);
                                         const data = await res.json();
                                         setLineage(data);
                                       } catch(e) {
@@ -973,8 +976,6 @@ function App() {
                         )}
                       </div>
                     )}
-
-                    {/* Lineage Provenance Panel */}
                     {(lineageLoading || lineage) && (
                       <div style={{ marginTop: "1.5rem", borderRadius: "12px", border: "1px solid rgba(99, 102, 241, 0.4)", background: "rgba(99, 102, 241, 0.05)", padding: "1.25rem" }}>
                         <h4 style={{ color: "#a5b4fc", fontSize: "0.9rem", fontWeight: "700", marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
