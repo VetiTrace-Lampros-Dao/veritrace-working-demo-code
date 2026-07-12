@@ -7,8 +7,8 @@ import './App.css';
 
 const CONTRACT_ADDRESS = "0x468edc5b2fe9d1c919f2377cbe0ccb16f32ead29";
 
-const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || "http://localhost:8080";
-const HASH_API_URL = import.meta.env.VITE_HASH_API_URL || "http://localhost:8081";
+const CORE_API_URL = import.meta.env.VITE_CORE_API_URL || "https://api.veritrace.dpkvtrading.online";
+const HASH_API_URL = import.meta.env.VITE_HASH_API_URL || "https://api.hash.veritrace.dpkvtrading.online";
 
 const CONTRACT_ABI = [
   {
