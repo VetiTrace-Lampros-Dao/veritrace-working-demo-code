@@ -167,3 +167,57 @@ If a user wants to download the verification proof JSON:
 To show a tree of copies derived from an original asset:
 **Endpoint:** `GET {CORE_API_URL}/api/v1/content/{targetHash}/lineage`
 **Response:** Returns a JSON tree map of derivative hashes and similarity scores.
+
+
+
+
+
+
+### All Enpoints 
+
+
+1. Hashing Service Endpoints (Default Port: 8081)
+POST /api/v1/hash
+
+Purpose: Extracts cryptographic and perceptual signatures from media.
+Request: multipart/form-data containing the file (Image, Video, PDF, or DOCX).
+Response: JSON with sha256, phash, media_type, and keyframes (for videos/documents).
+2. Core Backend API Endpoints (Default Port: 8080)
+POST /api/v1/pin-file
+
+Purpose: Uploads and pins a raw media file to IPFS.
+Request: multipart/form-data containing the file.
+Response: JSON returning the ipfs_cid.
+POST /api/v1/pin
+
+Purpose: Uploads and pins a JSON metadata object to IPFS.
+Request: JSON payload containing your metadata fields.
+Response: JSON returning the ipfs_cid.
+GET /api/v1/verify/exact
+
+Purpose: Checks for an exact 1:1 match of a file based on its SHA256 hash.
+Query Params: ?hash=0xYOUR_SHA256_HASH
+Response: JSON with match_found (boolean) and the record metadata if found.
+GET /api/v1/verify/fuzzy
+
+Purpose: Checks for derivative/altered copies of single images using perceptual hashing (pHash) vector similarity.
+Query Params: ?phash=YOUR_PHASH_UINT64
+Response: JSON with match_found, similarity percentage (e.g., 95.5), and the matching parent record.
+POST /api/v1/verify/segments
+
+Purpose: Checks for derivative/altered copies of videos or multi-page documents by analyzing multiple segment keyframes.
+Request: JSON containing sha256, media_type, and an array of segments (offset and phash).
+Response: JSON with match_found, similarity percentage, and the matching parent record.
+GET /api/v1/verify/certificate
+
+Purpose: Exports a verifiable JSON certificate of registration for a specific asset.
+Query Params: ?hash=0xYOUR_SHA256_HASH
+Response: Downloadable JSON certificate payload.
+GET /api/v1/content/:hash/lineage
+
+Purpose: Retrieves the tree/lineage of all known derivative versions stemming from an original parent asset.
+URL Params: :hash (the original parent SHA256)
+Response: JSON tree structure of derivative hashes and similarities.
+GET /health
+
+Purpose: System monitoring to ensure the core API, database, and vector stores are reachable.
