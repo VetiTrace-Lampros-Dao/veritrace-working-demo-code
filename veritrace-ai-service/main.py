@@ -11,9 +11,7 @@ print("Model loaded successfully!")
 
 @app.post("/api/v1/embed")
 async def embed_image(file: UploadFile = File(...)):
-    if not file.content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="File provided is not an image")
-    
+
     try:
         contents = await file.read()
         image = Image.open(io.BytesIO(contents)).convert("RGB")
