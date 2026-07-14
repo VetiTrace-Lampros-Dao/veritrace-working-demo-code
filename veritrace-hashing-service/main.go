@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -10,27 +11,31 @@ import (
 	_ "image/png"
 	"io"
 	"log"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/corona10/goimagehash"
 )
 
 type KeyframeResponse struct {
-	Offset uint64 `json:"offset"`
-	PHash  uint64 `json:"phash"`
-	Text   string `json:"text,omitempty"`
+	Offset       uint64    `json:"offset"`
+	PHash        uint64    `json:"phash"`
+	SemanticHash []float32 `json:"semantic_hash,omitempty"`
+	Text         string    `json:"text,omitempty"`
 }
 
 type HashResponse struct {
-	SHA256    string             `json:"sha256"`
-	PHash     uint64             `json:"phash"`
-	MediaType string             `json:"media_type"`
-	Keyframes []KeyframeResponse `json:"keyframes,omitempty"`
+	SHA256       string             `json:"sha256"`
+	PHash        uint64             `json:"phash"`
+	SemanticHash []float32          `json:"semantic_hash,omitempty"`
+	MediaType    string             `json:"media_type"`
+	Keyframes    []KeyframeResponse `json:"keyframes,omitempty"`
 }
 
 func main() {
@@ -146,10 +151,13 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		semanticHash := getSemanticHash(tempFile.Name())
+
 		res := HashResponse{
-			SHA256:    sha256Hex,
-			PHash:     hash.GetHash(),
-			MediaType: "image",
+			SHA256:       sha256Hex,
+			PHash:        hash.GetHash(),
+			SemanticHash: semanticHash,
+			MediaType:    "image",
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(res)
@@ -202,7 +210,45 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if len(keyframes) == 0 {
-			http.Error(w, "failed to extract pages from document", http.StatusInternalServerError)
+			// We won't error out yet, because there might be images!
+		}
+
+		// 2. Image Extraction (Extracts embedded photos inside the PDF)
+		imgCmd := exec.Command("pdfimages", "-j", tempFile.Name(), filepath.Join(tempDir, "img"))
+		imgCmd.Run() // Ignore errors, it might just have no images
+
+		files, _ := os.ReadDir(tempDir)
+		for _, f := range files {
+			if !strings.HasPrefix(f.Name(), "img-") {
+				continue
+			}
+			framePath := filepath.Join(tempDir, f.Name())
+			fReader, err := os.Open(framePath)
+			if err != nil {
+				continue
+			}
+			img, _, err := image.Decode(fReader)
+			fReader.Close()
+			if err != nil {
+				continue
+			}
+
+			hash, err := goimagehash.PerceptionHash(img)
+			if err != nil {
+				continue
+			}
+
+			semanticHash := getSemanticHash(framePath)
+
+			keyframes = append(keyframes, KeyframeResponse{
+				Offset:       0, // Embedded images don't map perfectly to page offsets with pdfimages
+				PHash:        hash.GetHash(),
+				SemanticHash: semanticHash,
+			})
+		}
+
+		if len(keyframes) == 0 {
+			http.Error(w, "failed to extract pages or images from document", http.StatusInternalServerError)
 			return
 		}
 
@@ -263,9 +309,12 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
+			semanticHash := getSemanticHash(framePath)
+
 			keyframes = append(keyframes, KeyframeResponse{
-				Offset: uint64(idx),
-				PHash:  hash.GetHash(),
+				Offset:       uint64(idx),
+				PHash:        hash.GetHash(),
+				SemanticHash: semanticHash,
 			})
 		}
 
@@ -275,10 +324,11 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		res := HashResponse{
-			SHA256:    sha256Hex,
-			PHash:     keyframes[0].PHash,
-			MediaType: "video",
-			Keyframes: keyframes,
+			SHA256:       sha256Hex,
+			PHash:        keyframes[0].PHash,
+			SemanticHash: keyframes[0].SemanticHash,
+			MediaType:    "video",
+			Keyframes:    keyframes,
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -286,6 +336,54 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+}
+
+func getSemanticHash(filePath string) []float32 {
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Printf("Failed to open file for semantic hash: %v", err)
+		return nil
+	}
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	if err != nil {
+		log.Printf("Failed to create form file: %v", err)
+		return nil
+	}
+	io.Copy(part, file)
+	writer.Close()
+
+	req, err := http.NewRequest("POST", "http://host.docker.internal:8082/api/v1/embed", body)
+	if err != nil {
+		log.Printf("Failed to create request: %v", err)
+		return nil
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("Failed to call ai_service: %v", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("ai_service returned status %d", resp.StatusCode)
+		return nil
+	}
+
+	var result struct {
+		SemanticHash []float32 `json:"semantic_hash"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("Failed to decode ai_service response: %v", err)
+		return nil
+	}
+	return result.SemanticHash
 }
 
 func getPDFPageCount(pdfPath string) int {
