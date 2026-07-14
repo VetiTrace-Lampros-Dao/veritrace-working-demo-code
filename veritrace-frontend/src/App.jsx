@@ -224,7 +224,8 @@ function App() {
         } else if (isSegmented) {
           const segments = (hashingResult.keyframes || []).map(kf => ({
             offset: Number(kf.offset),
-            phash: Number(kf.phash)
+            phash: Number(kf.phash),
+            semantic_hash: kf.semantic_hash
           }));
           fetch(`${CORE_API_URL}/api/v1/verify/segments`, {
             method: 'POST',
@@ -789,6 +790,103 @@ function App() {
                                         Verify IPFS Source
                                       </a>
                                     )}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ) : verificationResult.is_deepfake ? (
+                            <div className="outcome-card" style={{ borderColor: "#ef4444", backgroundColor: "rgba(239, 68, 68, 0.05)" }}>
+                              <div className="outcome-header" style={{ color: "#ef4444" }}>
+                                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                                <h3>DEEPFAKE / AI-ALTERED CONTENT DETECTED</h3>
+                              </div>
+                              <div className="outcome-body">
+                                <div>Our semantic AI analysis determined this file is a deepfake or AI-manipulated version of a protected asset.</div>
+                                
+                                <div style={{
+                                  margin: "1rem 0",
+                                  padding: "0.75rem",
+                                  borderRadius: "8px",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: "0.5rem",
+                                  fontSize: "0.85rem",
+                                  fontWeight: "600",
+                                  backgroundColor: verificationResult.record.AllowAiTraining ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+                                  border: `1px solid ${verificationResult.record.AllowAiTraining ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+                                  color: verificationResult.record.AllowAiTraining ? "#34d399" : "#f87171"
+                                }}>
+                                  <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "16px", height: "16px" }}>
+                                    {verificationResult.record.AllowAiTraining ? (
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                    ) : (
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                    )}
+                                  </svg>
+                                  <span>{verificationResult.record.AllowAiTraining ? "AI MODEL TRAINING AUTHORIZED (USDC Royalties Active)" : "AI MODEL TRAINING FORBIDDEN (No Scraping Allowed)"}</span>
+                                </div>
+
+                                <div className="outcome-meta-grid">
+                                  <div className="meta-box">
+                                    <span>Original Parent</span>
+                                    <strong title={verificationResult.record.Sha256Hash}>
+                                      {verificationResult.record.Sha256Hash.substring(0, 10)}...{verificationResult.record.Sha256Hash.substring(60)}
+                                    </strong>
+                                  </div>
+                                  <div className="meta-box">
+                                    <span>Semantic Similarity</span>
+                                    <strong>{verificationResult.similarity.toFixed(2)}%</strong>
+                                  </div>
+                                  {verificationResult.timestamp_offset !== undefined && (
+                                    <div className="meta-box">
+                                      <span>Matched Offset</span>
+                                      <strong>
+                                        {verificationResult.media_type === 'document'
+                                          ? `Page ${verificationResult.timestamp_offset}`
+                                          : `${verificationResult.timestamp_offset} seconds`}
+                                      </strong>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="original-media-preview" style={{ marginTop: "1.25rem", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "1.25rem" }}>
+                                  <h4 style={{ color: "#e5e7eb", marginBottom: "0.75rem", fontSize: "0.85rem", fontWeight: "600" }}>Original Registered File Preview</h4>
+                                  <div className="media-viewport" style={{
+                                    width: "100%",
+                                    height: "180px",
+                                    overflow: "hidden",
+                                    borderRadius: "8px",
+                                    backgroundColor: "rgba(0,0,0,0.3)",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    border: "1px solid rgba(255,255,255,0.05)"
+                                  }}>
+                                    {verificationResult.record.MediaType === 'video' ? (
+                                      <video src={verificationResult.record.MediaS3Url || verificationResult.record.MediaIpfsUrl} controls style={{ width: "100%", maxHeight: "180px" }} />
+                                    ) : verificationResult.record.MediaType === 'document' ? (
+                                      <div style={{ padding: "1.5rem", textAlign: "center" }}>
+                                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style={{ width: "40px", height: "40px", color: "#60a5fa", margin: "0 auto" }}>
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                        </svg>
+                                        <div style={{ color: "#9ca3af", fontSize: "0.8rem", marginTop: "0.5rem" }}>Registered Document</div>
+                                      </div>
+                                    ) : (
+                                      <img src={verificationResult.record.MediaS3Url || verificationResult.record.MediaIpfsUrl} alt="Original Registered" style={{ width: "100%", height: "100%", objectFit: "contain", maxHeight: "180px" }} />
+                                    )}
+                                  </div>
+                                  <div style={{ marginTop: "1rem", display: "flex", gap: "0.5rem" }}>
+                                    <a
+                                      href={verificationResult.record.MediaS3Url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="btn btn-secondary"
+                                      style={{ flex: 1, textAlign: "center", fontSize: "0.75rem", padding: "0.4rem 0.75rem", textDecoration: "none", display: "inline-block" }}
+                                    >
+                                      View Original (S3)
+                                    </a>
                                   </div>
                                 </div>
                               </div>

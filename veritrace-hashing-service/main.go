@@ -356,7 +356,7 @@ func getSemanticHash(filePath string) []float32 {
 	io.Copy(part, file)
 	writer.Close()
 
-	req, err := http.NewRequest("POST", "http://host.docker.internal:8082/api/v1/embed", body)
+	req, err := http.NewRequest("POST", "https://api.ai.veritrace.dpkvtrading.online/api/v1/embed", body)
 	if err != nil {
 		log.Printf("Failed to create request: %v", err)
 		return nil

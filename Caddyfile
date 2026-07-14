@@ -10,3 +10,7 @@ api.hash.veritrace.dpkvtrading.online {
 s3.veritrace.dpkvtrading.online {
     reverse_proxy localhost:9000
 }
+
+api.ai.veritrace.dpkvtrading.online {
+    reverse_proxy localhost:8082
+}
