@@ -4,6 +4,6 @@ pydantic==2.3.0
 sentence-transformers==3.4.1
 insightface==0.7.3
 onnxruntime==1.17.0
-opencv-python-headless==4.9.0.800
+opencv-python-headless==4.9.0.80
 Pillow==10.0.1
 python-multipart==0.0.6
