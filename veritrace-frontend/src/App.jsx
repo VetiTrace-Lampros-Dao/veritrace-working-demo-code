@@ -129,7 +129,7 @@ function App() {
       });
     }
 
-    if (aiTool === "None (Real Photograph)" && maxConf > 0.8) {
+    if (aiTool === "None (Real Photograph)" && maxConf > 0.75) {
       alert(`Lie Detected ❌\n\nOur AI analyzer detected a high probability (${(maxConf * 100).toFixed(1)}%) that this media is AI-generated. You cannot register this as a Real Photograph.\n\nPlease declare the correct AI tool to proceed.`);
       return;
     }
