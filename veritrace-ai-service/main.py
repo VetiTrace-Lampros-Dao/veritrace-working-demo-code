@@ -7,7 +7,12 @@ app = FastAPI()
 
 print("Loading CLIP Vision model...")
 model = SentenceTransformer('clip-ViT-B-32')
-print("Model loaded successfully!")
+
+print("Loading AI-Detector Model...")
+from transformers import pipeline
+ai_detector = pipeline("image-classification", model="umm-maybe/AI-image-detector")
+
+print("Models loaded successfully!")
 
 @app.post("/api/v1/embed")
 async def embed_image(file: UploadFile = File(...)):
@@ -22,7 +27,19 @@ async def embed_image(file: UploadFile = File(...)):
         # Convert NumPy array to Python list
         embedding_list = embedding.tolist()
         
-        return {"semantic_hash": embedding_list}
+        # Run AI Artifact detection
+        detection_results = ai_detector(image)
+        # detection_results looks like: [{'label': 'artificial', 'score': 0.99}, {'label': 'human', 'score': 0.01}]
+        ai_confidence = 0.0
+        for res in detection_results:
+            if res['label'] == 'artificial':
+                ai_confidence = res['score']
+                break
+        
+        return {
+            "semantic_hash": embedding_list,
+            "ai_confidence_score": ai_confidence
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

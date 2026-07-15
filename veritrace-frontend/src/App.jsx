@@ -42,6 +42,7 @@ function App() {
   const [lineage, setLineage] = useState(null);
   const [lineageLoading, setLineageLoading] = useState(false);
   const [hashingResult, setHashingResult] = useState(null);
+  const [aiTool, setAiTool] = useState("None (Real Photograph)");
 
   const [registrationStep, setRegistrationStep] = useState(0);
   const [txHash, setTxHash] = useState("");
@@ -107,6 +108,7 @@ function App() {
     setRegistrationStep(0);
     setTxHash("");
     setVerificationResult(null);
+    setAiTool("None (Real Photograph)");
     setAllowAiTraining(false);
     setWebhookUrl("");
     setRegisteredMetadataUrl("");
@@ -117,6 +119,18 @@ function App() {
   const executeRegistration = async () => {
     if (!isConnected || !walletClient) {
       alert("Please connect your wallet first.");
+      return;
+    }
+
+    let maxConf = hashingResult.ai_confidence_score || 0;
+    if (hashingResult.keyframes) {
+      hashingResult.keyframes.forEach(kf => {
+        if (kf.ai_confidence_score > maxConf) maxConf = kf.ai_confidence_score;
+      });
+    }
+
+    if (aiTool === "None (Real Photograph)" && maxConf > 0.8) {
+      alert(`Lie Detected ❌\n\nOur AI analyzer detected a high probability (${(maxConf * 100).toFixed(1)}%) that this media is AI-generated. You cannot register this as a Real Photograph.\n\nPlease declare the correct AI tool to proceed.`);
       return;
     }
 
@@ -192,7 +206,7 @@ function App() {
       const formattedSha256 = hashingResult.sha256;
       const phashVal = BigInt(hashingResult.phash);
 
-      const tx = await contract.registerContent(formattedSha256, phashVal, ipfsCid, "DALL-E 3", gasOverrides);
+      const tx = await contract.registerContent(formattedSha256, phashVal, ipfsCid, aiTool, gasOverrides);
       setTxHash(tx.hash);
       setRegistrationStep(4);
 
@@ -575,6 +589,23 @@ function App() {
                           style={{ width: "100%", padding: "0.5rem", borderRadius: "4px", border: "1px solid #374151", backgroundColor: "#1f2937", color: "white" }}
                         />
                         <p style={{ fontSize: "0.8rem", color: "#9ca3af", marginTop: "0.25rem" }}>We will POST to this URL if someone verifies a matching asset.</p>
+                      </div>
+
+                      <div style={{ marginTop: "1rem" }}>
+                        <label style={{ display: "block", marginBottom: "0.5rem", fontWeight: "600", fontSize: "0.9rem", color: "#e5e7eb" }}>Creation Method (AI Tool)</label>
+                        <select
+                          className="form-control"
+                          value={aiTool}
+                          onChange={(e) => setAiTool(e.target.value)}
+                          style={{ width: "100%", padding: "0.5rem", borderRadius: "4px", border: "1px solid #374151", backgroundColor: "#1f2937", color: "white" }}
+                        >
+                          <option value="None (Real Photograph)">None (Real Photograph)</option>
+                          <option value="Midjourney">Midjourney</option>
+                          <option value="DALL-E 3">DALL-E 3</option>
+                          <option value="Stable Diffusion">Stable Diffusion</option>
+                          <option value="Runway / Sora (Video)">Runway / Sora (Video)</option>
+                          <option value="Other AI">Other AI</option>
+                        </select>
                       </div>
 
                       {parentSha256 && (

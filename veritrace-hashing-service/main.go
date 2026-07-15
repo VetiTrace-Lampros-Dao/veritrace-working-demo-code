@@ -26,14 +26,16 @@ import (
 type KeyframeResponse struct {
 	Offset       uint64    `json:"offset"`
 	PHash        uint64    `json:"phash"`
-	SemanticHash []float32 `json:"semantic_hash,omitempty"`
+	SemanticHash      []float32 `json:"semantic_hash,omitempty"`
+	AiConfidenceScore float32   `json:"ai_confidence_score,omitempty"`
 	Text         string    `json:"text,omitempty"`
 }
 
 type HashResponse struct {
 	SHA256       string             `json:"sha256"`
 	PHash        uint64             `json:"phash"`
-	SemanticHash []float32          `json:"semantic_hash,omitempty"`
+	SemanticHash      []float32          `json:"semantic_hash,omitempty"`
+	AiConfidenceScore float32            `json:"ai_confidence_score,omitempty"`
 	MediaType    string             `json:"media_type"`
 	Keyframes    []KeyframeResponse `json:"keyframes,omitempty"`
 }
@@ -151,13 +153,14 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		semanticHash := getSemanticHash(tempFile.Name())
+		semanticHash, aiConf := getSemanticHash(tempFile.Name())
 
 		res := HashResponse{
-			SHA256:       sha256Hex,
-			PHash:        hash.GetHash(),
-			SemanticHash: semanticHash,
-			MediaType:    "image",
+			SHA256:            sha256Hex,
+			PHash:             hash.GetHash(),
+			SemanticHash:      semanticHash,
+			AiConfidenceScore: aiConf,
+			MediaType:         "image",
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(res)
@@ -238,12 +241,13 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			semanticHash := getSemanticHash(framePath)
+			semanticHash, aiConf := getSemanticHash(framePath)
 
 			keyframes = append(keyframes, KeyframeResponse{
-				Offset:       0, // Embedded images don't map perfectly to page offsets with pdfimages
-				PHash:        hash.GetHash(),
-				SemanticHash: semanticHash,
+				Offset:            0, // Embedded images don't map perfectly to page offsets with pdfimages
+				PHash:             hash.GetHash(),
+				SemanticHash:      semanticHash,
+				AiConfidenceScore: aiConf,
 			})
 		}
 
@@ -309,12 +313,13 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			semanticHash := getSemanticHash(framePath)
+			semanticHash, aiConf := getSemanticHash(framePath)
 
 			keyframes = append(keyframes, KeyframeResponse{
-				Offset:       uint64(idx),
-				PHash:        hash.GetHash(),
-				SemanticHash: semanticHash,
+				Offset:            uint64(idx),
+				PHash:             hash.GetHash(),
+				SemanticHash:      semanticHash,
+				AiConfidenceScore: aiConf,
 			})
 		}
 
@@ -338,11 +343,11 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func getSemanticHash(filePath string) []float32 {
+func getSemanticHash(filePath string) ([]float32, float32) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		log.Printf("Failed to open file for semantic hash: %v", err)
-		return nil
+		return nil, 0.0
 	}
 	defer file.Close()
 
@@ -351,7 +356,7 @@ func getSemanticHash(filePath string) []float32 {
 	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 	if err != nil {
 		log.Printf("Failed to create form file: %v", err)
-		return nil
+		return nil, 0.0
 	}
 	io.Copy(part, file)
 	writer.Close()
@@ -359,7 +364,7 @@ func getSemanticHash(filePath string) []float32 {
 	req, err := http.NewRequest("POST", "http://host.docker.internal:8082/api/v1/embed", body)
 	if err != nil {
 		log.Printf("Failed to create request: %v", err)
-		return nil
+		return nil, 0.0
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
@@ -367,23 +372,24 @@ func getSemanticHash(filePath string) []float32 {
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("Failed to call ai_service: %v", err)
-		return nil
+		return nil, 0.0
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("ai_service returned status %d", resp.StatusCode)
-		return nil
+		return nil, 0.0
 	}
 
 	var result struct {
-		SemanticHash []float32 `json:"semantic_hash"`
+		SemanticHash      []float32 `json:"semantic_hash"`
+		AiConfidenceScore float32   `json:"ai_confidence_score"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		log.Printf("Failed to decode ai_service response: %v", err)
-		return nil
+		return nil, 0.0
 	}
-	return result.SemanticHash
+	return result.SemanticHash, result.AiConfidenceScore
 }
 
 func getPDFPageCount(pdfPath string) int {
