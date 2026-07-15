@@ -213,7 +213,7 @@ function App() {
     setVerifying(true);
     setVerificationResult(null);
 
-    const isSegmented = (mediaType === 'document' || mediaType === 'video') && hashingResult.keyframes && hashingResult.keyframes.length > 0;
+
 
     fetch(`${CORE_API_URL}/api/v1/verify/exact?hash=${hashingResult.sha256}`)
       .then(res => res.json())
@@ -221,29 +221,42 @@ function App() {
         if (exactRes.match_found) {
           setVerificationResult({ ...exactRes, _resultType: 'exact' });
           setVerifying(false);
-        } else if (isSegmented) {
-          const segments = (hashingResult.keyframes || []).map(kf => ({
-            offset: Number(kf.offset),
-            phash: Number(kf.phash),
-            semantic_hash: kf.semantic_hash
-          }));
-          fetch(`${CORE_API_URL}/api/v1/verify/segments`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              sha256: hashingResult.sha256,
-              media_type: mediaType,
-              segments
-            })
-          })
-            .then(res => res.json())
-            .then(segRes => { setVerificationResult({ ...segRes, _resultType: 'segment' }); setVerifying(false); })
-            .catch(err => { alert('Segment verification error: ' + err.message); setVerifying(false); });
         } else {
-          fetch(`${CORE_API_URL}/api/v1/verify/fuzzy?phash=${hashingResult.phash}`)
-            .then(res => res.json())
-            .then(fuzzyRes => { setVerificationResult({ ...fuzzyRes, _resultType: 'fuzzy' }); setVerifying(false); })
-            .catch(err => { alert('Fuzzy search error: ' + err.message); setVerifying(false); });
+          let segments = [];
+          if (mediaType === 'image') {
+            segments = [{
+              offset: 0,
+              phash: Number(hashingResult.phash),
+              semantic_hash: hashingResult.semantic_hash
+            }];
+          } else {
+            segments = (hashingResult.keyframes || []).map(kf => ({
+              offset: Number(kf.offset),
+              phash: Number(kf.phash),
+              semantic_hash: kf.semantic_hash
+            }));
+          }
+
+          if (segments.length > 0) {
+            fetch(`${CORE_API_URL}/api/v1/verify/segments`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sha256: hashingResult.sha256,
+                media_type: mediaType,
+                segments
+              })
+            })
+              .then(res => res.json())
+              .then(segRes => { setVerificationResult({ ...segRes, _resultType: 'segment' }); setVerifying(false); })
+              .catch(err => { alert('Segment verification error: ' + err.message); setVerifying(false); });
+          } else {
+            // Fallback for files with no valid segments
+            fetch(`${CORE_API_URL}/api/v1/verify/fuzzy?phash=${hashingResult.phash}`)
+              .then(res => res.json())
+              .then(fuzzyRes => { setVerificationResult({ ...fuzzyRes, _resultType: 'fuzzy' }); setVerifying(false); })
+              .catch(err => { alert('Fuzzy search error: ' + err.message); setVerifying(false); });
+          }
         }
       })
       .catch(err => { alert('Exact verification error: ' + err.message); setVerifying(false); });
