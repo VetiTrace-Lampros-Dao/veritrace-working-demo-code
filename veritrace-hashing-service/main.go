@@ -417,7 +417,7 @@ func compareHandler(w http.ResponseWriter, r *http.Request) {
 
 	aiURL := os.Getenv("AI_SERVICE_URL")
 	if aiURL == "" {
-		aiURL = "http://ai_service:8082"
+		aiURL = "http://host.docker.internal:8082"
 	}
 
 	proxyReq, err := http.NewRequest("POST", aiURL+"/api/v1/compare", r.Body)
