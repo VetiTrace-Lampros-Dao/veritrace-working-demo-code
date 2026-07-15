@@ -3,7 +3,7 @@ FROM python:3.10-slim
 WORKDIR /app
 
 # Install CPU-only PyTorch to save disk space (prevents CUDA libraries from filling up EC2 instances)
-RUN pip install --no-cache-dir "torch>=2.6.0" torchvision --index-url https://download.pytorch.org/whl/cpu
+RUN pip install --no-cache-dir torch==2.6.0+cpu torchvision==0.21.0+cpu --index-url https://download.pytorch.org/whl/cpu
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
