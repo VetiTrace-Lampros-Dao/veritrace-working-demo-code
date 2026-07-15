@@ -49,6 +49,7 @@ func main() {
 	}
 
 	http.HandleFunc("/api/v1/hash", corsHandler(hashHandler))
+	http.HandleFunc("/api/v1/compare", corsHandler(compareHandler))
 
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/", corsHandler(func(w http.ResponseWriter, r *http.Request) {
@@ -380,7 +381,20 @@ func getSemanticHash(filePath string) ([]float32, float32, []float32) {
 
 	if resp.StatusCode != http.StatusOK {
 		log.Printf("ai_service returned status %d", resp.StatusCode)
-		return nil, 0.0, nil
+		resBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, 0, nil
+		}
+
+		var payload struct {
+			SemanticHash      []float32 `json:"semantic_hash"`
+			FaceHash          []float32 `json:"face_hash"`
+			AiConfidenceScore float32   `json:"ai_confidence_score"`
+		}
+		if err := json.Unmarshal(resBody, &payload); err != nil {
+			return nil, 0, nil
+		}
+		return payload.SemanticHash, payload.AiConfidenceScore, payload.FaceHash
 	}
 
 	var result struct {
@@ -393,6 +407,38 @@ func getSemanticHash(filePath string) ([]float32, float32, []float32) {
 		return nil, 0.0, nil
 	}
 	return result.SemanticHash, result.AiConfidenceScore, result.FaceHash
+}
+
+func compareHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	aiURL := os.Getenv("AI_SERVICE_URL")
+	if aiURL == "" {
+		aiURL = "http://ai_service:8082"
+	}
+
+	proxyReq, err := http.NewRequest("POST", aiURL+"/api/v1/compare", r.Body)
+	if err != nil {
+		http.Error(w, "failed to create proxy request", http.StatusInternalServerError)
+		return
+	}
+
+	proxyReq.Header = r.Header
+
+	client := &http.Client{}
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		http.Error(w, "failed to contact ai service: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
 }
 
 func getPDFPageCount(pdfPath string) int {
