@@ -2,7 +2,8 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install CPU-only PyTorch to save disk space (prevents CUDA libraries from filling up EC2 instances)
+# Pre-install dependencies from standard PyPI to bypass PyTorch index metadata bugs
+RUN pip install --no-cache-dir typing-extensions jinja2 sympy networkx filelock fsspec
 RUN pip install --no-cache-dir torch==2.6.0+cpu torchvision==0.21.0+cpu --index-url https://download.pytorch.org/whl/cpu
 
 COPY requirements.txt .
