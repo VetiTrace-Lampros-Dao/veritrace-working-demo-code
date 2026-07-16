@@ -161,7 +161,7 @@ function App() {
         representative_phash: Number(hashingResult.phash),
         semantic_hash: hashingResult.semantic_hash || [],
         face_hashes: hashingResult.face_hashes || [],
-        audio_hash: hashingResult.audio_hash || [],
+        audio_hashes: hashingResult.audio_hashes || [],
         media_ipfs_url: mediaIpfsUrl,
         media_s3_url: mediaS3Url,
         allow_ai_training: allowAiTraining,
@@ -265,7 +265,7 @@ function App() {
               body: JSON.stringify({
                 sha256: hashingResult.sha256,
                 media_type: mediaType,
-                audio_hash: hashingResult.audio_hash || [],
+                audio_hashes: hashingResult.audio_hashes || [],
                 segments
               })
             })
