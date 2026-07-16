@@ -9,8 +9,16 @@ app = FastAPI()
 print("Loading CLIP Vision model...")
 model = SentenceTransformer('clip-ViT-B-32')
 
-from transformers import pipeline
+from transformers import pipeline, Wav2Vec2Processor, Wav2Vec2Model
+import torch
+import librosa
+import soundfile as sf
+
 ai_detector = pipeline("image-classification", model="umm-maybe/AI-image-detector")
+
+print("Loading Audio Model...")
+audio_processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base")
+audio_model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base")
 
 print("Loading InsightFace Model...")
 import cv2
@@ -55,6 +63,28 @@ async def embed_image(file: UploadFile = File(...)):
             "semantic_hash": embedding_list,
             "ai_confidence_score": ai_confidence,
             "face_hashes": face_hashes
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/embed_audio")
+async def embed_audio(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        
+        # Load audio using librosa from bytes
+        audio, sr = librosa.load(io.BytesIO(contents), sr=16000)
+        
+        # Process and generate embeddings
+        inputs = audio_processor(audio, sampling_rate=sr, return_tensors="pt")
+        with torch.no_grad():
+            outputs = audio_model(**inputs)
+            
+        # Average across time dimension to get a single vector per audio file
+        embedding = outputs.last_hidden_state.mean(dim=1).squeeze().tolist()
+        
+        return {
+            "audio_hash": embedding
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

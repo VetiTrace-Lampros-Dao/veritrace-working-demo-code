@@ -37,6 +37,7 @@ type HashResponse struct {
 	PHash             uint64             `json:"phash"`
 	SemanticHash      []float32          `json:"semantic_hash,omitempty"`
 	FaceHashes        [][]float32        `json:"face_hashes,omitempty"`
+	AudioHash         []float32          `json:"audio_hash,omitempty"`
 	AiConfidenceScore float32            `json:"ai_confidence_score,omitempty"`
 	MediaType         string             `json:"media_type"`
 	Keyframes         []KeyframeResponse `json:"keyframes,omitempty"`
@@ -276,10 +277,19 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if isVid {
+		// Extract frames
 		cmd := exec.Command("ffmpeg", "-i", tempFile.Name(), "-vf", "fps=1", filepath.Join(tempDir, "frame_%d.jpg"))
 		if err := cmd.Run(); err != nil {
 			http.Error(w, "ffmpeg processing failed: "+err.Error(), http.StatusInternalServerError)
 			return
+		}
+
+		// Extract audio
+		audioPath := filepath.Join(tempDir, "audio.wav")
+		audioCmd := exec.Command("ffmpeg", "-i", tempFile.Name(), "-vn", "-acodec", "pcm_s16le", "-ar", "16000", "-ac", "1", audioPath)
+		var audioHash []float32
+		if err := audioCmd.Run(); err == nil {
+			audioHash = getAudioHash(audioPath)
 		}
 
 		files, err := os.ReadDir(tempDir)
@@ -333,7 +343,8 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 			SHA256:            sha256Hex,
 			PHash:             keyframes[0].PHash,
 			SemanticHash:      keyframes[0].SemanticHash,
-			FaceHashes:          keyframes[0].FaceHashes,
+			FaceHashes:        keyframes[0].FaceHashes,
+			AudioHash:         audioHash,
 			AiConfidenceScore: keyframes[0].AiConfidenceScore,
 			MediaType:         "video",
 			Keyframes:         keyframes,
@@ -344,6 +355,60 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+}
+
+func getAudioHash(filePath string) []float32 {
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Printf("Failed to open file for audio hash: %v", err)
+		return nil
+	}
+	defer file.Close()
+
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
+	if err != nil {
+		log.Printf("Failed to create form file: %v", err)
+		return nil
+	}
+	io.Copy(part, file)
+	writer.Close()
+
+	// Check if we are running inside docker or locally
+	aiURL := "http://host.docker.internal:8082/api/v1/embed_audio"
+	if _, err := http.Get("http://ai_service:8082/"); err == nil {
+		aiURL = "http://ai_service:8082/api/v1/embed_audio"
+	}
+
+	req, err := http.NewRequest("POST", aiURL, body)
+	if err != nil {
+		log.Printf("Failed to create request: %v", err)
+		return nil
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("Failed to call ai_service: %v", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("ai_service returned status %d", resp.StatusCode)
+		return nil
+	}
+
+	var result struct {
+		AudioHash []float32 `json:"audio_hash"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("Failed to decode ai_service response: %v", err)
+		return nil
+	}
+	return result.AudioHash
 }
 
 func getSemanticHash(filePath string) ([]float32, float32, [][]float32) {

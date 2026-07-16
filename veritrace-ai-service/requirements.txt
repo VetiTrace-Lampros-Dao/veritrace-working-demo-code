@@ -8,3 +8,5 @@ numpy<2
 opencv-python-headless==4.9.0.80
 Pillow==10.0.1
 python-multipart==0.0.6
+librosa==0.10.1
+soundfile==0.12.1
