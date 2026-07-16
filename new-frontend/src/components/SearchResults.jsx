@@ -111,7 +111,7 @@ export default function SearchResults({ results, loading, uploadedFile }) {
                   <div className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-2)]">Matched Original (On-Chain)</div>
                   <div className="flex-1 bg-[var(--bg-2)] rounded-xl border border-[var(--border)] overflow-hidden flex items-center justify-center min-h-[300px] relative" onContextMenu={(e) => e.preventDefault()}>
                     {loadingOriginal ? <div className="text-center"><Spinner /><div className="text-xs text-[var(--text-3)] mt-2">Resolving media...</div></div> : resolvedOriginalUrl ? (
-                        {resolvedMediaType === 'video' ? <video src={resolvedOriginalUrl} controls controlsList="nodownload" className="max-w-full max-h-full object-contain" /> : <img src={resolvedOriginalUrl} alt="Matched" className="max-w-full max-h-full object-contain pointer-events-none select-none" />}
+                        resolvedMediaType === 'video' ? <video src={resolvedOriginalUrl} controls controlsList="nodownload" className="max-w-full max-h-full object-contain" /> : <img src={resolvedOriginalUrl} alt="Matched" className="max-w-full max-h-full object-contain pointer-events-none select-none" />
                     ) : (
                       <div className="text-center p-4 flex flex-col items-center">
                         <Lock size={24} className="text-[var(--text-3)] mb-1" />

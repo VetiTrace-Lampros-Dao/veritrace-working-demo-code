@@ -151,7 +151,7 @@ export default function LibraryPage() {
                 {modalLoading ? (
                   <div className="text-center"><Spinner /><div className="text-xs text-[var(--text-3)] mt-2">Retrieving media from IPFS...</div></div>
                 ) : modalMediaUrl ? (
-                    {modalMediaType === 'video' ? <video src={modalMediaUrl} controls controlsList="nodownload" className="max-w-full max-h-full" /> : <img src={modalMediaUrl} alt="Asset" className="max-w-full max-h-full object-contain pointer-events-none select-none" />}
+                    modalMediaType === 'video' ? <video src={modalMediaUrl} controls controlsList="nodownload" className="max-w-full max-h-full" /> : <img src={modalMediaUrl} alt="Asset" className="max-w-full max-h-full object-contain pointer-events-none select-none" />
                 ) : (
                   <div className="text-center p-4 flex flex-col items-center">
                     <Lock size={28} className="text-[var(--text-3)] mb-1" />
