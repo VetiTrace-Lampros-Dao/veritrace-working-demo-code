@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('clip-ViT-B-32')"
 
 # Pre-download the AI Lie Detector model so it is baked into the Docker image
-RUN python -c "from transformers import pipeline; pipeline('image-classification', model='umm-maybe/AI-image-detector')"
+RUN python -c "from transformers import pipeline; pipeline('image-classification', model='dima806/deepfake_vs_real_image_detection')"
 
 # Pre-download InsightFace models
 RUN python -c "from insightface.app import FaceAnalysis; app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider']); app.prepare(ctx_id=0, det_size=(640, 640))"
