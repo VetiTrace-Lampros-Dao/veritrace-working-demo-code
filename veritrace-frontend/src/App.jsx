@@ -159,6 +159,9 @@ function App() {
       const metadataPayload = {
         sha256: hashingResult.sha256,
         representative_phash: Number(hashingResult.phash),
+        semantic_hash: hashingResult.semantic_hash || [],
+        face_hashes: hashingResult.face_hashes || [],
+        audio_hash: hashingResult.audio_hash || [],
         media_ipfs_url: mediaIpfsUrl,
         media_s3_url: mediaS3Url,
         allow_ai_training: allowAiTraining,
@@ -167,7 +170,9 @@ function App() {
         media_type: mediaType,
         keyframes: (hashingResult.keyframes || []).map(kf => ({
           offset: Number(kf.offset),
-          phash: Number(kf.phash)
+          phash: Number(kf.phash),
+          semantic_hash: kf.semantic_hash || [],
+          face_hashes: kf.face_hashes || []
         }))
       };
 
@@ -241,13 +246,15 @@ function App() {
             segments = [{
               offset: 0,
               phash: Number(hashingResult.phash),
-              semantic_hash: hashingResult.semantic_hash
+              semantic_hash: hashingResult.semantic_hash || [],
+              face_hashes: hashingResult.face_hashes || []
             }];
           } else {
             segments = (hashingResult.keyframes || []).map(kf => ({
               offset: Number(kf.offset),
               phash: Number(kf.phash),
-              semantic_hash: kf.semantic_hash
+              semantic_hash: kf.semantic_hash || [],
+              face_hashes: kf.face_hashes || []
             }));
           }
 
@@ -258,6 +265,7 @@ function App() {
               body: JSON.stringify({
                 sha256: hashingResult.sha256,
                 media_type: mediaType,
+                audio_hash: hashingResult.audio_hash || [],
                 segments
               })
             })

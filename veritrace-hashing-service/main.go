@@ -37,7 +37,7 @@ type HashResponse struct {
 	PHash             uint64             `json:"phash"`
 	SemanticHash      []float32          `json:"semantic_hash,omitempty"`
 	FaceHashes        [][]float32        `json:"face_hashes,omitempty"`
-	AudioHash         []float32          `json:"audio_hash,omitempty"`
+	AudioHash         []float32          `json:"audio_hashes,omitempty"`
 	AiConfidenceScore float32            `json:"ai_confidence_score,omitempty"`
 	MediaType         string             `json:"media_type"`
 	Keyframes         []KeyframeResponse `json:"keyframes,omitempty"`
