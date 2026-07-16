@@ -1,0 +1,5 @@
+services:
+  ai_service:
+    build: .
+    ports:
+      - "8082:8082"
