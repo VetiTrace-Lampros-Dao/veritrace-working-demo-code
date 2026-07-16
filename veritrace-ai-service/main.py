@@ -47,16 +47,14 @@ async def embed_image(file: UploadFile = File(...)):
         cv_img = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
         faces = face_app.get(cv_img)
         
-        face_hash = []
+        face_hashes = []
         if len(faces) > 0:
-            # get largest face by bounding box area
-            largest_face = max(faces, key=lambda f: (f.bbox[2]-f.bbox[0]) * (f.bbox[3]-f.bbox[1]))
-            face_hash = largest_face.embedding.tolist()
+            face_hashes = [f.embedding.tolist() for f in faces]
         
         return {
             "semantic_hash": embedding_list,
             "ai_confidence_score": ai_confidence,
-            "face_hash": face_hash
+            "face_hashes": face_hashes
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
