@@ -14,7 +14,7 @@ import torch
 import librosa
 import soundfile as sf
 
-ai_detector = pipeline("image-classification", model="umm-maybe/AI-image-detector")
+ai_detector = pipeline("image-classification", model="dima806/deepfake_vs_real_image_detection")
 
 print("Loading Audio Model...")
 audio_processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base")
@@ -44,12 +44,14 @@ async def embed_image(file: UploadFile = File(...)):
         
  
         detection_results = ai_detector(image)
-        # detection_results looks like: [{'label': 'artificial', 'score': 0.99}, {'label': 'human', 'score': 0.01}]
         ai_confidence = 0.0
         for res in detection_results:
-            if res['label'] == 'artificial':
+            label = res['label'].lower()
+            if label in ['artificial', 'fake', 'ai-generated', 'synthetic']:
                 ai_confidence = res['score']
                 break
+            elif label in ['human', 'real', 'original'] and len(detection_results) == 1:
+                ai_confidence = 1.0 - res['score']
         
         # Face extraction
         cv_img = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
