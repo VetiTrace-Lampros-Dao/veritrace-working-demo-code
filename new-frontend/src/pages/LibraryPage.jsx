@@ -152,7 +152,7 @@ export default function LibraryPage() {
                   <div className="text-center"><Spinner /><div className="text-xs text-[var(--text-3)] mt-2">Retrieving media from IPFS...</div></div>
                 ) : modalMediaUrl ? (
                   <>
-                    {modalMediaType === 'video' ? <video src={modalMediaUrl} controls controlsList="nodownload" className="max-w-full max-h-full pointer-events-none select-none" /> : <img src={modalMediaUrl} alt="Asset" className="max-w-full max-h-full object-contain pointer-events-none select-none" />}
+                    {modalMediaType === 'video' ? <video src={modalMediaUrl} controls controlsList="nodownload" className="max-w-full max-h-full" /> : <img src={modalMediaUrl} alt="Asset" className="max-w-full max-h-full object-contain pointer-events-none select-none" />}
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center" style={{ background: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.02), rgba(255,255,255,0.02) 15px, rgba(0,0,0,0.15) 15px, rgba(0,0,0,0.15) 30px)' }}>
                       <span className="rotate-[-25deg] text-sm font-extrabold uppercase tracking-widest text-white/15 select-none text-center leading-relaxed">VERITRACE REGISTERED<br />COPY PROTECTED<br /><span className="text-[10px] font-mono">OWNER: {selectedAsset.creator.slice(0, 16)}...{selectedAsset.creator.slice(-6)}</span></span>
                     </div>

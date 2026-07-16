@@ -95,7 +95,7 @@ export default function SearchResults({ results, loading, uploadedFile }) {
         {results.map((result, index) => <MatchCard key={index} result={result} onSelect={() => setComparisonMatch(result)} />)}
       </div>
 
-      <Modal open={!!comparisonMatch} onClose={() => { setComparisonMatch(null); setHeatmapBase64(null) }} maxWidth={resolvedOriginalUrl && resolvedMediaType === 'image' ? 'max-w-6xl' : 'max-w-3xl'}>
+      <Modal open={!!comparisonMatch} onClose={() => { setComparisonMatch(null); setHeatmapBase64(null) }} maxWidth={resolvedOriginalUrl && resolvedMediaType === 'image' ? 'max-w-7xl' : 'max-w-5xl'}>
         {comparisonMatch && (
           <>
             <ModalHeader title={`Authenticity Check — ${comparisonMatch.similarity?.toFixed(1)}% Match`} onClose={() => { setComparisonMatch(null); setHeatmapBase64(null) }} icon={<Search size={18} className="text-[#12AAFF]" />} />
@@ -112,7 +112,7 @@ export default function SearchResults({ results, loading, uploadedFile }) {
                   <div className="flex-1 bg-[var(--bg-2)] rounded-xl border border-[var(--border)] overflow-hidden flex items-center justify-center min-h-[300px] relative" onContextMenu={(e) => e.preventDefault()}>
                     {loadingOriginal ? <div className="text-center"><Spinner /><div className="text-xs text-[var(--text-3)] mt-2">Resolving media...</div></div> : resolvedOriginalUrl ? (
                       <>
-                        {resolvedMediaType === 'video' ? <video src={resolvedOriginalUrl} controls controlsList="nodownload" className="max-w-full max-h-full object-contain pointer-events-none select-none" /> : <img src={resolvedOriginalUrl} alt="Matched" className="max-w-full max-h-full object-contain pointer-events-none select-none" />}
+                        {resolvedMediaType === 'video' ? <video src={resolvedOriginalUrl} controls controlsList="nodownload" className="max-w-full max-h-full object-contain" /> : <img src={resolvedOriginalUrl} alt="Matched" className="max-w-full max-h-full object-contain pointer-events-none select-none" />}
                         <div className="absolute inset-0 pointer-events-none flex items-center justify-center" style={{ background: 'repeating-linear-gradient(45deg, rgba(255,255,255,0.02), rgba(255,255,255,0.02) 15px, rgba(0,0,0,0.1) 15px, rgba(0,0,0,0.1) 30px)' }}><span className="rotate-[-25deg] text-sm font-extrabold uppercase tracking-widest text-white/15 select-none">VERITRACE REGISTERED</span></div>
                       </>
                     ) : (
