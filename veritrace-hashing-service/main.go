@@ -51,6 +51,7 @@ func main() {
 
 	http.HandleFunc("/api/v1/hash", corsHandler(hashHandler))
 	http.HandleFunc("/api/v1/compare", corsHandler(compareHandler))
+	http.HandleFunc("/api/v1/analyze_sync", corsHandler(analyzeSyncHandler))
 
 	fs := http.FileServer(http.Dir("./static"))
 	http.Handle("/", corsHandler(func(w http.ResponseWriter, r *http.Request) {
@@ -124,9 +125,10 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 	isVid := strings.HasPrefix(mimeType, "video/")
 	isPdf := mimeType == "application/pdf"
 	isDocx := mimeType == "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || mimeType == "application/msword"
+	isText := strings.HasPrefix(mimeType, "text/") || mimeType == "application/json"
 
 	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if !isImg && !isVid && !isPdf && !isDocx {
+	if !isImg && !isVid && !isPdf && !isDocx && !isText {
 		if ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".webp" {
 			isImg = true
 		} else if ext == ".mp4" || ext == ".avi" || ext == ".mkv" || ext == ".mov" || ext == ".webm" {
@@ -135,11 +137,35 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 			isPdf = true
 		} else if ext == ".docx" || ext == ".doc" {
 			isDocx = true
+		} else if ext == ".txt" || ext == ".md" || ext == ".json" {
+			isText = true
 		}
 	}
 
-	if !isImg && !isVid && !isPdf && !isDocx {
+	if !isImg && !isVid && !isPdf && !isDocx && !isText {
 		http.Error(w, "unsupported media type", http.StatusBadRequest)
+		return
+	}
+
+	if isText {
+		_, _ = tempFile.Seek(0, 0)
+		textContent, err := io.ReadAll(tempFile)
+		if err != nil {
+			http.Error(w, "failed to read text file", http.StatusInternalServerError)
+			return
+		}
+
+		semHash, _, _ := getTextSemanticHash(string(textContent))
+
+		res := HashResponse{
+			SHA256:       sha256Hex,
+			PHash:        0,
+			SemanticHash: semHash,
+			MediaType:    "text",
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(res)
 		return
 	}
 
@@ -504,6 +530,80 @@ func compareHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
+}
+
+func analyzeSyncHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	aiURL := os.Getenv("AI_SERVICE_URL")
+	if aiURL == "" {
+		aiURL = "http://host.docker.internal:8082"
+	}
+	if _, err := http.Get("http://ai_service:8082/"); err == nil {
+		aiURL = "http://ai_service:8082"
+	}
+
+	proxyReq, err := http.NewRequest("POST", aiURL+"/api/v1/analyze_sync", r.Body)
+	if err != nil {
+		http.Error(w, "failed to create proxy request", http.StatusInternalServerError)
+		return
+	}
+
+	proxyReq.Header = r.Header
+
+	client := &http.Client{}
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		http.Error(w, "failed to contact ai service: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func getTextSemanticHash(text string) ([]float32, float32, [][]float32) {
+	aiURL := "http://host.docker.internal:8082/api/v1/embed_text"
+	if _, err := http.Get("http://ai_service:8082/"); err == nil {
+		aiURL = "http://ai_service:8082/api/v1/embed_text"
+	}
+
+	payload := map[string]string{"text": text}
+	body, _ := json.Marshal(payload)
+
+	req, err := http.NewRequest("POST", aiURL, bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("Failed to create request for embed_text: %v", err)
+		return nil, 0.0, nil
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("Failed to call ai_service embed_text: %v", err)
+		return nil, 0.0, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("ai_service returned status %d for embed_text", resp.StatusCode)
+		return nil, 0, nil
+	}
+
+	var result struct {
+		SemanticHash []float32 `json:"semantic_hash"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("Failed to decode ai_service embed_text response: %v", err)
+		return nil, 0.0, nil
+	}
+	return result.SemanticHash, 0.0, nil
 }
 
 func getPDFPageCount(pdfPath string) int {
