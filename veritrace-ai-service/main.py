@@ -175,19 +175,58 @@ async def analyze_sync(file: UploadFile = File(...)):
         with os.fdopen(fd, 'wb') as f:
             f.write(await file.read())
         
-        # In a full production setup, this is where we would use SyncNet or
-        # extract MediaPipe lip landmarks and compute Pearson correlation with audio.
-        # For the prototype, we simulate the analysis if it takes too long.
-        import random
-        # Simulate processing time
-        # random score between 0.7 and 1.0 for real videos, <0.3 for deepfakes
-        sync_score = random.uniform(0.7, 0.99)
+        import cv2
+        import librosa
+        import numpy as np
+
+        # Extract audio energy
+        y, sr = librosa.load(temp_path, sr=16000)
+        audio_energy = librosa.feature.rms(y=y, frame_length=1024, hop_length=512)[0]
+
+        # Extract video motion energy
+        cap = cv2.VideoCapture(temp_path)
+        motion_energy = []
+        ret, prev_frame = cap.read()
+        if ret:
+            prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+            while True:
+                ret, frame = cap.read()
+                if not ret: break
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                diff = cv2.absdiff(gray, prev_gray)
+                motion_energy.append(np.mean(diff))
+                prev_gray = gray
+        cap.release()
         
         os.remove(temp_path)
-        
+
+        # Correlate
+        if len(audio_energy) > 10 and len(motion_energy) > 10:
+            target_len = min(len(audio_energy), len(motion_energy))
+            x_audio = np.linspace(0, 1, len(audio_energy))
+            x_motion = np.linspace(0, 1, len(motion_energy))
+            x_target = np.linspace(0, 1, target_len)
+
+            resampled_audio = np.interp(x_target, x_audio, audio_energy)
+            resampled_motion = np.interp(x_target, x_motion, motion_energy)
+
+            # Normalize
+            std_audio = np.std(resampled_audio) + 1e-6
+            std_motion = np.std(resampled_motion) + 1e-6
+            resampled_audio = (resampled_audio - np.mean(resampled_audio)) / std_audio
+            resampled_motion = (resampled_motion - np.mean(resampled_motion)) / std_motion
+
+            correlation = np.corrcoef(resampled_audio, resampled_motion)[0, 1]
+            
+            # Map correlation (-1 to 1) to a sync score (0 to 1)
+            # Typically out-of-sync audio has ~0 correlation. Intact audio has >0.15
+            sync_score = max(0, min(1, (correlation + 0.1) * 2.5))
+        else:
+            sync_score = 0.5
+            
         return {
-            "sync_score": sync_score,
-            "is_deepfake": sync_score < 0.5,
+            "sync_score": float(sync_score),
+            "is_deepfake": bool(sync_score < 0.3),
             "message": "Sync analysis completed successfully"
         }
     except Exception as e:
