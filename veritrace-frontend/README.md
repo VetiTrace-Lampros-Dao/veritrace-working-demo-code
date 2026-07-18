@@ -56,7 +56,7 @@ All configurations (contract addresses, ABIs, endpoints, and file size limits) a
 👉 [`src/config.js`](file:///c:/Users/daksh/.gemini/antigravity/scratch/VeriTrace/veritrace-frontend/src/config.js)
 
 ### Connected Resources:
-* **Contract Address**: `0x468edc5b2fe9d1c919f2377cbe0ccb16f32ead29` (Arbitrum Sepolia)
+* **Contract Address**: `0xd5a4e9185cbcea881f2c76b07732335250537820` (Arbitrum Sepolia)
 * **Hash Engine API**: `https://api.hash.veritrace.dpkvtrading.online`
 * **Core Backend API**: `https://api.veritrace.dpkvtrading.online`
 

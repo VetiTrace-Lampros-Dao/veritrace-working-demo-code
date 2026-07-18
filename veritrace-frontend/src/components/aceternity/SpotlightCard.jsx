@@ -21,16 +21,16 @@ export function SpotlightCard({ children, className, spotlightColor = 'rgba(18,1
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setOpacity(1)}
       onMouseLeave={() => setOpacity(0)}
-      className={cn('spotlight group relative', className)}
+      className={cn('spotlight group relative isolate', className)}
     >
       <div
-        className="pointer-events-none absolute inset-0 transition-opacity duration-300"
+        className="pointer-events-none absolute inset-0 z-10 rounded-[inherit] transition-opacity duration-300"
         style={{
           opacity,
           background: `radial-gradient(300px circle at ${position.x}px ${position.y}px, ${spotlightColor}, transparent 70%)`,
         }}
       />
-      {children}
+      <div className="relative z-20 h-full">{children}</div>
     </div>
   )
 }

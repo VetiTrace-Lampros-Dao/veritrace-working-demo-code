@@ -1,7 +1,7 @@
 const { ethers } = require("ethers");
 const rpcUrl = "https://sepolia-rollup.arbitrum.io/rpc";
 const provider = new ethers.JsonRpcProvider(rpcUrl);
-const contractAddress = "0x468edc5b2fe9d1c919f2377cbe0ccb16f32ead29";
+const contractAddress = "0xd5a4e9185cbcea881f2c76b07732335250537820";
 const abi = ["function verifyContent(bytes32) view returns (address, uint64, uint64, string, string)"];
 const contract = new ethers.Contract(contractAddress, abi, provider);
 

@@ -14,7 +14,7 @@ print("Loading Text Embedding model...")
 text_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 
-from transformers import pipeline, Wav2Vec2Processor, Wav2Vec2Model
+from transformers import pipeline, Wav2Vec2Processor, Wav2Vec2Model, BlipProcessor, BlipForConditionalGeneration
 import torch
 import librosa
 import soundfile as sf
@@ -31,6 +31,10 @@ import numpy as np
 from insightface.app import FaceAnalysis
 face_app = FaceAnalysis(name='buffalo_l', providers=['CPUExecutionProvider'])
 face_app.prepare(ctx_id=0, det_size=(640, 640))
+
+print("Loading BLIP Captioning Model...")
+blip_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+blip_model = BlipForConditionalGeneration.from_pretrained("Salesforce/blip-image-captioning-base")
 
 print("Models loaded successfully!")
 
@@ -66,10 +70,16 @@ async def embed_image(file: UploadFile = File(...)):
         if len(faces) > 0:
             face_hashes = [f.embedding.tolist() for f in faces]
         
+        # Generate Caption
+        inputs = blip_processor(image, return_tensors="pt")
+        out = blip_model.generate(**inputs)
+        caption = blip_processor.decode(out[0], skip_special_tokens=True)
+        
         return {
             "semantic_hash": embedding_list,
             "ai_confidence_score": ai_confidence,
-            "face_hashes": face_hashes
+            "face_hashes": face_hashes,
+            "caption": caption
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -26,6 +26,13 @@ export const HASH_ENGINE_API = 'https://api.hash.veritrace.dpkvtrading.online';
  */
 export const CORE_BACKEND_API = 'https://api.veritrace.dpkvtrading.online';
 
+/**
+ * RAG Help Bot API — Orchestrator API for natural language assistance,
+ * query resolution, on-chain lookup, and team notifications.
+ * Endpoint: POST /chat
+ */
+export const RAG_BOT_API = import.meta.env.VITE_RAG_BOT_API || 'https://rag-bot-1-15kz.onrender.com';
+
 // ─────────────────────────────────────────────────────────────
 // Smart Contract (Arbitrum Sepolia)
 // ─────────────────────────────────────────────────────────────
@@ -33,9 +40,9 @@ export const CORE_BACKEND_API = 'https://api.veritrace.dpkvtrading.online';
 /**
  * Deployed VeritraceRegistry Stylus contract address.
  * Written in Rust, compiled to WASM, deployed on Arbitrum Sepolia.
- * Explorer: https://sepolia.arbiscan.io/address/0x468edc5b2fe9d1c919f2377cbe0ccb16f32ead29
+ * Explorer: https://sepolia.arbiscan.io/address/0xd5a4e9185cbcea881f2c76b07732335250537820
  */
-export const CONTRACT_ADDRESS = '0x468edc5b2fe9d1c919f2377cbe0ccb16f32ead29';
+export const CONTRACT_ADDRESS = '0xd5a4e9185cbcea881f2c76b07732335250537820';
 
 /**
  * ABI for the VeritraceRegistry contract.
@@ -50,17 +57,27 @@ export const CONTRACT_ADDRESS = '0x468edc5b2fe9d1c919f2377cbe0ccb16f32ead29';
  */
 export const CONTRACT_ABI = [
   // ── Write function: Register new content ──
-  'function registerContent(bytes32 sha256hash, uint64 phash, string ipfs_cid, string ai_tool)',
+  'function registerContent(bytes32 sha256hash, uint64 phash, string ipfs_cid, string ai_tool, bool allow_ai_training)',
+
+  // ── Write function: Purchase dataset access ──
+  'function purchaseDatasetAccess(address token, address[] creators, uint256[] amounts, uint256 total_usdc)',
+
+  // ── Write function: Withdraw treasury ──
+  'function withdrawTreasury(address token)',
 
   // ── Read function: Verify content by hash ──
-  'function verifyContent(bytes32 sha256hash) view returns (address creator, uint64 timestamp, uint64 phash, string ipfs_cid, string ai_tool)',
+  'function verifyContent(bytes32 sha256hash) view returns (address creator, uint64 timestamp, uint64 phash, string ipfs_cid, string ai_tool, bool allow_ai_training)',
 
   // ── Event: Emitted when content is registered ──
-  'event ContentRegistered(bytes32 indexed sha256hash, address indexed creator, uint64 phash, uint64 timestamp, string ipfsCid, string aitool)',
+  'event ContentRegistered(bytes32 indexed sha256hash, address indexed creator, uint64 phash, uint64 timestamp, string ipfsCid, string aitool, bool allowAiTraining)',
+
+  // ── Event: Emitted when dataset is purchased ──
+  'event DatasetPurchased(address indexed buyer, uint256 totalUsdc)',
 
   // ── Error types ──
   'error ContentAlreadyRegistered(bytes32 sha256hash)',
   'error ContentNotFound(bytes32 sha256hash)',
+  'error TransferFailed()',
 ];
 
 /**

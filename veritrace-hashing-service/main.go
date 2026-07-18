@@ -30,6 +30,7 @@ type KeyframeResponse struct {
 	FaceHashes        [][]float32 `json:"face_hashes,omitempty"`
 	AiConfidenceScore float32     `json:"ai_confidence_score,omitempty"`
 	Text              string      `json:"text,omitempty"`
+	Caption           string      `json:"caption,omitempty"`
 }
 
 type HashResponse struct {
@@ -40,6 +41,7 @@ type HashResponse struct {
 	AudioHash         []float32          `json:"audio_hashes,omitempty"`
 	AiConfidenceScore float32            `json:"ai_confidence_score,omitempty"`
 	MediaType         string             `json:"media_type"`
+	Caption           string             `json:"caption,omitempty"`
 	Keyframes         []KeyframeResponse `json:"keyframes,omitempty"`
 }
 
@@ -183,7 +185,7 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		semanticHash, aiConf, faceHashes := getSemanticHash(tempFile.Name())
+		semanticHash, aiConf, faceHashes, caption := getSemanticHash(tempFile.Name())
 
 		res := HashResponse{
 			SHA256:            sha256Hex,
@@ -192,6 +194,7 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 			FaceHashes:        faceHashes,
 			AiConfidenceScore: aiConf,
 			MediaType:         "image",
+			Caption:           caption,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(res)
@@ -267,7 +270,7 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			semanticHash, aiConf, faceHashes := getSemanticHash(framePath)
+			semanticHash, aiConf, faceHashes, caption := getSemanticHash(framePath)
 
 			keyframes = append(keyframes, KeyframeResponse{
 				Offset:            0,
@@ -275,6 +278,7 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 				SemanticHash:      semanticHash,
 				FaceHashes:        faceHashes,
 				AiConfidenceScore: aiConf,
+				Caption:           caption,
 			})
 		}
 
@@ -349,7 +353,7 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 
-			semanticHash, aiConf, faceHashes := getSemanticHash(framePath)
+			semanticHash, aiConf, faceHashes, caption := getSemanticHash(framePath)
 
 			keyframes = append(keyframes, KeyframeResponse{
 				Offset:            uint64(idx),
@@ -357,6 +361,7 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 				SemanticHash:      semanticHash,
 				FaceHashes:        faceHashes,
 				AiConfidenceScore: aiConf,
+				Caption:           caption,
 			})
 		}
 
@@ -373,6 +378,7 @@ func hashHandler(w http.ResponseWriter, r *http.Request) {
 			AudioHash:         audioHash,
 			AiConfidenceScore: keyframes[0].AiConfidenceScore,
 			MediaType:         "video",
+			Caption:           keyframes[0].Caption,
 			Keyframes:         keyframes,
 		}
 
@@ -437,11 +443,11 @@ func getAudioHash(filePath string) []float32 {
 	return result.AudioHash
 }
 
-func getSemanticHash(filePath string) ([]float32, float32, [][]float32) {
+func getSemanticHash(filePath string) ([]float32, float32, [][]float32, string) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		log.Printf("Failed to open file for semantic hash: %v", err)
-		return nil, 0.0, nil
+		return nil, 0.0, nil, ""
 	}
 	defer file.Close()
 
@@ -450,7 +456,7 @@ func getSemanticHash(filePath string) ([]float32, float32, [][]float32) {
 	part, err := writer.CreateFormFile("file", filepath.Base(filePath))
 	if err != nil {
 		log.Printf("Failed to create form file: %v", err)
-		return nil, 0.0, nil
+		return nil, 0.0, nil, ""
 	}
 	io.Copy(part, file)
 	writer.Close()
@@ -458,7 +464,7 @@ func getSemanticHash(filePath string) ([]float32, float32, [][]float32) {
 	req, err := http.NewRequest("POST", "http://host.docker.internal:8082/api/v1/embed", body)
 	if err != nil {
 		log.Printf("Failed to create request: %v", err)
-		return nil, 0.0, nil
+		return nil, 0.0, nil, ""
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
@@ -466,7 +472,7 @@ func getSemanticHash(filePath string) ([]float32, float32, [][]float32) {
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("Failed to call ai_service: %v", err)
-		return nil, 0.0, nil
+		return nil, 0.0, nil, ""
 	}
 	defer resp.Body.Close()
 
@@ -474,30 +480,32 @@ func getSemanticHash(filePath string) ([]float32, float32, [][]float32) {
 		log.Printf("ai_service returned status %d", resp.StatusCode)
 		resBody, err := io.ReadAll(resp.Body)
 		if err != nil {
-			return nil, 0, nil
+			return nil, 0, nil, ""
 		}
 
 		var payload struct {
 			SemanticHash      []float32   `json:"semantic_hash"`
 			FaceHashes        [][]float32 `json:"face_hashes"`
 			AiConfidenceScore float32     `json:"ai_confidence_score"`
+			Caption           string      `json:"caption"`
 		}
 		if err := json.Unmarshal(resBody, &payload); err != nil {
-			return nil, 0, nil
+			return nil, 0, nil, ""
 		}
-		return payload.SemanticHash, payload.AiConfidenceScore, payload.FaceHashes
+		return payload.SemanticHash, payload.AiConfidenceScore, payload.FaceHashes, payload.Caption
 	}
 
 	var result struct {
 		SemanticHash      []float32   `json:"semantic_hash"`
 		FaceHashes        [][]float32 `json:"face_hashes"`
 		AiConfidenceScore float32     `json:"ai_confidence_score"`
+		Caption           string      `json:"caption"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		log.Printf("Failed to decode ai_service response: %v", err)
-		return nil, 0.0, nil
+		return nil, 0.0, nil, ""
 	}
-	return result.SemanticHash, result.AiConfidenceScore, result.FaceHashes
+	return result.SemanticHash, result.AiConfidenceScore, result.FaceHashes, result.Caption
 }
 
 func compareHandler(w http.ResponseWriter, r *http.Request) {

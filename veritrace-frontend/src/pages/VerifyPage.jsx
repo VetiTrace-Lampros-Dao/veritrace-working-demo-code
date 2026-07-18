@@ -8,13 +8,15 @@ import SearchResults from '../components/SearchResults'
 import { Card, CardHeader, CardTitle, CardBody } from '../components/ui/card'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
-import { Alert } from '../components/ui/alert'
+import { Skeleton } from '../components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
+import { toast } from 'sonner'
 import { Progress } from '../components/ui/progress'
-import { Spinner } from '../components/ui/spinner'
-import { EmptyState } from '../components/ui/empty-state'
 import { SpotlightCard } from '../components/aceternity/SpotlightCard'
 import { ArbitrumLogo } from '../components/ArbitrumLogo'
+import PageHero from '../components/PageHero'
 import { useUpload } from '../context/UploadContext'
+import { useIntegrityTone } from '../components/providers/ExperienceProvider'
 import { config } from '../wagmiConfig'
 import {
   HASH_ENGINE_API, CONTRACT_ADDRESS, CONTRACT_ABI, ARBITRUM_SEPOLIA, CORE_BACKEND_API,
@@ -32,6 +34,7 @@ export default function VerifyPage() {
     verBlockchainRecord: blockchainRecord, setVerBlockchainRecord: setBlockchainRecord,
     verDbResults: dbResults, setVerDbResults: setDbResults,
   } = useUpload()
+  const { setIntegrityTone } = useIntegrityTone()
 
   const [inputType, setInputType] = useState('media')
   const [textContent, setTextContent] = useState('')
@@ -48,6 +51,12 @@ export default function VerifyPage() {
       }
     }
   }, [textContent, inputType, setFile])
+
+  useEffect(() => {
+    const hasIntegrityAlert = error || dbResults?.some(result => result.isDeepfake || result.matchType === 'deepfake')
+    setIntegrityTone(hasIntegrityAlert ? 'alert' : 'secure')
+    return () => setIntegrityTone('secure')
+  }, [error, dbResults, setIntegrityTone])
 
   const computeLocalSHA256 = async (f) => {
     const arrayBuffer = await f.arrayBuffer()
@@ -123,17 +132,18 @@ export default function VerifyPage() {
 
       setDbResults(matches)
       try { const count = Number(localStorage.getItem('vt_verifs_count') || 0); localStorage.setItem('vt_verifs_count', count + 1) } catch {}
-    } catch (err) { setError(`Failed to perform verification check: ${err.message}`) }
+      toast.success('Verification complete!')
+    } catch (err) {
+      setError(`Failed to perform verification check: ${err.message}`)
+      toast.error(`Verification failed: ${err.message}`)
+    }
     finally { setLoading(false) }
   }
 
   return (
-    <section className="max-w-[1280px] mx-auto px-5 pt-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold mb-1 text-[var(--text)]">Verify & Search Content</h1>
-        <p className="text-sm text-[var(--text-3)]">Upload a file to check if it's registered or search for visual matches in the database</p>
-      </div>
-
+    <section>
+      <PageHero eyebrow="AUTHENTICITY INTELLIGENCE" title="See the evidence behind a file." description="Compare content against public records and layered similarity signals to identify originals, likely derivatives, and high-risk alterations." icon={Search} />
+      <div className="max-w-[1280px] mx-auto px-5 pt-7">
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.5fr] gap-5">
         {/* LEFT */}
         <div className="flex flex-col gap-5">
@@ -141,23 +151,26 @@ export default function VerifyPage() {
             <Card className="card-hover-glow">
               <CardHeader>
                 <CardTitle className="flex justify-between items-center">
-                  <span className="flex items-center gap-2"><Search size={16} className="text-[#12AAFF]" /> Verify Content</span>
+                  <span className="flex items-center gap-2"><Search size={16} className="text-[#12AAFF]" /> Forensic intake</span>
                 </CardTitle>
               </CardHeader>
               <CardBody className="flex flex-col gap-4">
-                <div className="flex bg-[var(--bg-2)] p-1 rounded-xl border border-[var(--border)]">
-                  <button onClick={() => { setInputType('media'); setFile(null); setLocalSha256(null); setPhash(null); setBlockchainRecord(null); setDbResults(null); setError(null) }} className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition-colors ${inputType === 'media' ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-3)] hover:text-[var(--text-2)]'}`}><FileText size={16} /> Media File</button>
-                  <button onClick={() => { setInputType('text'); setFile(null); setLocalSha256(null); setPhash(null); setBlockchainRecord(null); setDbResults(null); setError(null) }} className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition-colors ${inputType === 'text' ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-3)] hover:text-[var(--text-2)]'}`}><Type size={16} /> Text Article</button>
-                </div>
-                {inputType === 'media' ? (
-                  <FileUpload onFileSelected={handleFileSelected} label="Drop a file to check against the VeriTrace registry" />
-                ) : (
-                  <div className="flex flex-col gap-2">
+                <Tabs value={inputType} onValueChange={(val) => { setInputType(val); setFile(null); setLocalSha256(null); setPhash(null); setBlockchainRecord(null); setDbResults(null); setError(null) }} className="w-full">
+                  <TabsList className="grid w-full grid-cols-2 mb-4 bg-[var(--bg-2)] border border-[var(--border)] rounded-xl">
+                    <TabsTrigger value="media" className="data-[state=active]:bg-[var(--surface)] rounded-lg py-1.5"><FileText size={16} className="mr-2" /> Media File</TabsTrigger>
+                    <TabsTrigger value="text" className="data-[state=active]:bg-[var(--surface)] rounded-lg py-1.5"><Type size={16} className="mr-2" /> Text Article</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="media">
+                    <FileUpload onFileSelected={handleFileSelected} label="Drop a file to inspect its provenance" />
+                  </TabsContent>
+                  
+                  <TabsContent value="text" className="flex flex-col gap-2 mt-0">
                     <textarea className="w-full h-32 p-3 bg-[var(--bg-2)] border border-[var(--border)] rounded-xl text-sm focus:border-[#12AAFF] focus:outline-none resize-none" placeholder="Paste your article or text content here to check it against the registry..." value={textContent} onChange={(e) => setTextContent(e.target.value)} />
                     <div className="text-[10px] text-[var(--text-3)] text-right">{textContent.length} characters</div>
-                    <Button onClick={() => handleFileSelected(file)} disabled={!textContent.trim()}>Check Registry</Button>
-                  </div>
-                )}
+                    <Button onClick={() => handleFileSelected(file)} disabled={!textContent.trim()}>Run provenance check</Button>
+                  </TabsContent>
+                </Tabs>
               </CardBody>
             </Card>
           </SpotlightCard>
@@ -166,7 +179,7 @@ export default function VerifyPage() {
             {(localSha256 || loading) && (
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
                 <Card className="card-hover-glow">
-                  <CardHeader><CardTitle>Computed Fingerprints</CardTitle></CardHeader>
+                  <CardHeader><CardTitle>Evidence extracted</CardTitle></CardHeader>
                   <CardBody className="flex flex-col gap-3">
                     {loading && !localSha256 ? <div className="skeleton h-9 rounded-lg w-full" /> : (
                       <>
@@ -181,9 +194,9 @@ export default function VerifyPage() {
           </AnimatePresence>
 
           <Card className="card-hover-glow">
-            <CardHeader><CardTitle><Info size={16} className="text-[#12AAFF]" /> Understanding Results</CardTitle></CardHeader>
+            <CardHeader><CardTitle><Info size={16} className="text-[#12AAFF]" /> Read the evidence</CardTitle></CardHeader>
             <CardBody className="text-xs flex flex-col gap-2.5">
-              <div className="flex items-start gap-3"><Badge variant="success" className="flex-shrink-0 mt-0.5">100%</Badge><div><strong className="text-[var(--text)]">Exact Match</strong> — Cryptographic hashes are identical. Byte-for-byte match with the registered original.</div></div>
+              <div className="flex items-start gap-3"><Badge variant="success" className="flex-shrink-0 mt-0.5">100%</Badge><div><strong className="text-[var(--text)]">Exact match</strong> — The cryptographic fingerprints are identical: this is the registered file, byte for byte.</div></div>
               <div className="flex items-start gap-3"><Badge variant="warning" className="flex-shrink-0 mt-0.5">80-99%</Badge><div><strong className="text-[var(--text)]">Similar Content</strong> — Perceptual signatures match closely. May be compressed, resized, or cropped.</div></div>
               <div className="flex items-start gap-3"><Badge variant="default" className="flex-shrink-0 mt-0.5">&lt;80%</Badge><div><strong className="text-[var(--text)]">No Match</strong> — No entries found within visual or cryptographic thresholds.</div></div>
             </CardBody>
@@ -197,12 +210,16 @@ export default function VerifyPage() {
               <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
                 <Card className={`card-hover-glow ${blockchainRecord ? 'border-[var(--success-border)]' : ''}`}>
                   <CardHeader className={blockchainRecord ? 'bg-[var(--success-bg)]' : ''}>
-                    <CardTitle className={blockchainRecord ? 'text-[#00D395]' : ''}><Shield size={16} /> On-Chain Smart Contract Proof</CardTitle>
-                    {blockchainRecord && <Badge variant="success">Verified Original</Badge>}
+                    <CardTitle className={blockchainRecord ? 'text-[#00D395]' : ''}><Shield size={16} /> Immutable registry record</CardTitle>
+                    {blockchainRecord && <Badge variant="success">Proof located</Badge>}
                   </CardHeader>
                   <CardBody>
                     {loading && !blockchainRecord ? (
-                      <div className="flex flex-col gap-2"><div className="skeleton h-3.5 rounded w-70%" /><div className="skeleton h-3.5 rounded w-60%" /><div className="skeleton h-3.5 rounded w-50%" /></div>
+                      <div className="flex flex-col gap-3 pt-2">
+                        <Skeleton className="h-4 w-3/4 bg-[var(--bg-2)]" />
+                        <Skeleton className="h-4 w-1/2 bg-[var(--bg-2)]" />
+                        <Skeleton className="h-4 w-2/3 bg-[var(--bg-2)]" />
+                      </div>
                     ) : (
                       <div className="flex flex-col gap-2 text-xs">
                         <DataRow label="Registrant Wallet"><a href={`${ARBITRUM_SEPOLIA.explorer}/address/${blockchainRecord.creator}`} target="_blank" rel="noopener noreferrer" className="font-mono font-semibold text-[#12AAFF] hover:opacity-80">{blockchainRecord.creator.slice(0, 10)}...{blockchainRecord.creator.slice(-6)}</a></DataRow>
@@ -247,9 +264,8 @@ export default function VerifyPage() {
               </CardBody>
             </Card>
           </SpotlightCard>
-
-          {error && <Alert variant="danger">{error}</Alert>}
         </div>
+      </div>
       </div>
     </section>
   )

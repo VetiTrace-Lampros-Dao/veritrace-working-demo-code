@@ -36,11 +36,13 @@ const HASH_TYPES = [
 
 const FAQ = [
   { q: 'Does VeriTrace store my original file?', a: 'Yes — your file is pinned to IPFS (permanent, content-addressed) and backed up to S3. Only the fingerprint hashes are written on-chain; the file itself lives off-chain.' },
-  { q: 'What blockchain does VeriTrace use?', a: 'Arbitrum Sepolia (testnet). The registry smart contract is deployed at 0x468edc5b2fe9d1c919f2377cbe0ccb16f32ead29 and uses the Stylus VM for gas efficiency.' },
+  { q: 'What blockchain does VeriTrace use?', a: 'Arbitrum Sepolia (testnet). The registry smart contract is deployed at 0xd5a4e9185cbcea881f2c76b07732335250537820 and uses the Stylus VM for gas efficiency.' },
   { q: 'Can I detect AI-generated content?', a: 'Yes. The hash engine computes an AI confidence score. If it exceeds 75%, you must declare the AI model used during registration. Undeclared AI content is flagged.' },
   { q: 'What is the fuzzy match threshold?', a: 'A pHash Hamming distance ≤ 22 out of 64 bits is considered a match. For semantic vectors, cosine similarity ≥ 0.85 triggers a match. Face embeddings use a 0.6 cosine threshold.' },
   { q: 'Is the verification free?', a: 'Verification (exact, fuzzy, segmented) is free — it only hits the Go backend API. Only registration requires a gas-paid blockchain transaction.' },
 ]
+
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../components/ui/accordion'
 
 export default function AboutPage() {
   return (
@@ -54,10 +56,10 @@ export default function AboutPage() {
             <span className="font-extrabold text-lg uppercase tracking-widest gradient-arb">VeriTrace</span>
           </div>
           <motion.h1 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="text-4xl md:text-5xl font-extrabold leading-tight mb-4 text-[var(--text)]">
-            How VeriTrace <span className="gradient-arb">Works</span>
+            Proof, not promises.
           </motion.h1>
           <p className="text-base text-[var(--text-2)] max-w-2xl mx-auto leading-relaxed mb-8">
-            Blockchain-backed content provenance using multi-modal fingerprinting — SHA-256, perceptual hashes, semantic vectors, ArcFace biometrics, and wav2vec2 voice prints.
+            VeriTrace combines cryptographic proof with perceptual intelligence, making ownership and authenticity verifiable even after content changes hands.
           </p>
           <div className="flex gap-3 justify-center flex-wrap">
             <Link to="/register"><Button variant="primary" size="lg"><FilePlus size={18} /> Register Content</Button></Link>
@@ -68,8 +70,8 @@ export default function AboutPage() {
 
       {/* ARCHITECTURE */}
       <section className="max-w-[1280px] mx-auto px-5 py-16">
-        <h2 className="text-center text-3xl font-extrabold mb-2 text-[var(--text)]">System Architecture</h2>
-        <p className="text-center text-sm text-[var(--text-3)] mb-10">Five layers working together to protect your content</p>
+        <h2 className="text-center text-3xl font-extrabold mb-2 text-[var(--text)]">Built to preserve context.</h2>
+        <p className="text-center text-sm text-[var(--text-3)] mb-10">Five purpose-built layers convert an upload into an enduring, verifiable proof.</p>
         <div className="flex items-stretch justify-center gap-0 flex-wrap overflow-x-auto">
           {[
             { icon: Cpu, label: 'Hash Engine', sub: 'Port 8081', color: '#12AAFF' },
@@ -112,8 +114,8 @@ export default function AboutPage() {
 
       {/* HASH TYPES */}
       <section className="max-w-[1280px] mx-auto px-5 pb-16">
-        <h2 className="text-center text-3xl font-extrabold mb-2 text-[var(--text)]">Fingerprint Types</h2>
-        <p className="text-center text-sm text-[var(--text-3)] mb-10">Multi-modal hashing catches everything from exact copies to AI deepfakes</p>
+        <h2 className="text-center text-3xl font-extrabold mb-2 text-[var(--text)]">Evidence that survives change.</h2>
+        <p className="text-center text-sm text-[var(--text-3)] mb-10">Each signal catches a different kind of transformation—from exact duplicates to sophisticated synthetic edits.</p>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {HASH_TYPES.map((h, i) => (
             <motion.div key={h.tag} initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: i * 0.05 }}>
@@ -136,16 +138,18 @@ export default function AboutPage() {
 
       {/* FAQ */}
       <section className="max-w-[760px] mx-auto px-5 pb-16">
-        <h2 className="text-center text-3xl font-extrabold mb-2 text-[var(--text)]">Frequently Asked Questions</h2>
-        <p className="text-center text-sm text-[var(--text-3)] mb-8">Everything you need to know about VeriTrace</p>
-        <div className="flex flex-col gap-3">{FAQ.map((f, i) => <FaqItem key={i} {...f} />)}</div>
+        <h2 className="text-center text-3xl font-extrabold mb-2 text-[var(--text)]">Questions, answered clearly.</h2>
+        <p className="text-center text-sm text-[var(--text-3)] mb-8">The practical details behind VeriTrace, from storage to verification thresholds.</p>
+        <Accordion type="single" collapsible className="w-full">
+          {FAQ.map((f, i) => <FaqItem key={i} {...f} i={i} />)}
+        </Accordion>
       </section>
 
       {/* CTA */}
       <AuroraBackground className="py-16 text-center">
         <div className="max-w-[1280px] mx-auto px-5">
-          <h2 className="text-3xl font-extrabold mb-3 text-[var(--text)]">Ready to protect your content?</h2>
-          <p className="text-sm text-[var(--text-2)] mb-8">Join the VeriTrace registry and secure your creative work on the blockchain.</p>
+          <h2 className="text-3xl font-extrabold mb-3 text-[var(--text)]">Your work deserves durable proof.</h2>
+          <p className="text-sm text-[var(--text-2)] mb-8">Create an ownership record today, then verify it anywhere tomorrow.</p>
           <div className="flex gap-3 justify-center flex-wrap">
             <Link to="/register"><Button variant="primary" size="lg"><FilePlus size={18} /> Get Started</Button></Link>
             <Link to="/verify"><Button variant="outline" size="lg"><Search size={18} /> Verify Content</Button></Link>
@@ -172,11 +176,15 @@ function StepCard({ num, title, desc, icon: Icon, color, delay }) {
   )
 }
 
-function FaqItem({ q, a }) {
+function FaqItem({ q, a, i }) {
   return (
-    <details className="group bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden hover:border-[var(--border-2)] transition-colors">
-      <summary className="p-4 cursor-pointer font-semibold text-sm flex items-center justify-between list-none select-none text-[var(--text)]">{q}<ChevronDown size={18} className="text-[#12AAFF] flex-shrink-0 group-open:rotate-180 transition-transform" /></summary>
-      <div className="px-4 pb-4 text-xs text-[var(--text-3)] leading-relaxed border-t border-[var(--border)] pt-3">{a}</div>
-    </details>
+    <AccordionItem value={`item-${i}`} className="bg-[var(--surface)] border border-[var(--border)] rounded-2xl overflow-hidden hover:border-[var(--border-2)] transition-colors mb-3 px-2 border-b-0">
+      <AccordionTrigger className="p-4 font-semibold text-sm hover:no-underline text-[var(--text)] data-[state=open]:text-[#12AAFF] [&[data-state=open]>svg]:rotate-180">
+        {q}
+      </AccordionTrigger>
+      <AccordionContent className="px-4 pb-4 text-xs text-[var(--text-3)] leading-relaxed border-t border-[var(--border)] pt-3">
+        {a}
+      </AccordionContent>
+    </AccordionItem>
   )
 }

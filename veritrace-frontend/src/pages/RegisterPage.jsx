@@ -14,8 +14,12 @@ import { Alert } from '../components/ui/alert'
 import { Progress } from '../components/ui/progress'
 import { Spinner } from '../components/ui/spinner'
 import { Select } from '../components/ui/input'
+import { Skeleton } from '../components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '../components/ui/tabs'
+import { toast } from 'sonner'
 import { SpotlightCard } from '../components/aceternity/SpotlightCard'
 import { ArbitrumLogo } from '../components/ArbitrumLogo'
+import PageHero from '../components/PageHero'
 import { useUpload } from '../context/UploadContext'
 import { downloadCertificate } from '../utils/generateCertificate'
 import { Upload, Fingerprint, Shield, CircleCheck as CheckCircle2, FilePlus, TriangleAlert as AlertTriangle, ExternalLink, Award, Bot, Webhook, FileText, Type } from 'lucide-react'
@@ -101,9 +105,13 @@ export default function RegisterPage() {
         aiConfidenceScore: data.ai_confidence_score,
         semanticHash: data.semantic_hash || [], faceHashes: data.face_hashes || [],
         audioHashes: data.audio_hashes || [], keyframes: data.keyframes || [],
+        caption: data.caption || '',
       })
       setStep(2)
-    } catch (err) { setError(`Failed to compute hashes: ${err.message}`) }
+    } catch (err) { 
+      setError(`Failed to compute hashes: ${err.message}`)
+      toast.error(`Failed to compute hashes: ${err.message}`)
+    }
     finally { setProcessing(false) }
   }
 
@@ -136,7 +144,7 @@ export default function RegisterPage() {
         allow_ai_training: allowAiTraining, webhook_url: webhookUrl, parent_sha256: '',
         media_type: hashes.mediaType || 'image', semantic_hash: hashes.semanticHash || [],
         face_hashes: hashes.faceHashes || [], audio_hashes: hashes.audioHashes || [],
-        keyframes: hashes.keyframes || [],
+        keyframes: hashes.keyframes || [], caption: hashes.caption || '',
       }
       const pinMetaRes = await fetch(`${CORE_BACKEND_API}/api/v1/pin`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(metadataPayload) })
       if (!pinMetaRes.ok) throw new Error(`Failed to pin metadata: ${pinMetaRes.statusText}`)
@@ -146,14 +154,14 @@ export default function RegisterPage() {
       try {
         const feeProvider = new ethers.JsonRpcProvider(ARBITRUM_SEPOLIA.rpcUrl)
         const feeData = await feeProvider.getFeeData()
-        const mult = 200n
+        const mult = 1000n
         safeMaxFee = feeData.maxFeePerGas ? (feeData.maxFeePerGas * mult) / 100n : undefined
         safePriorityFee = feeData.maxPriorityFeePerGas ? (feeData.maxPriorityFeePerGas * mult) / 100n : undefined
       } catch {}
       const txHash = await writeContractAsync({
         chainId: ARBITRUM_SEPOLIA.chainId, address: CONTRACT_ADDRESS,
         abi: parseAbi(CONTRACT_ABI), functionName: 'registerContent',
-        args: [sha256Bytes32, hashes.phash ? BigInt(hashes.phash) : 0n, ipfsCid || '', aiTool || ''],
+        args: [sha256Bytes32, hashes.phash ? BigInt(hashes.phash) : 0n, ipfsCid || '', aiTool || '', allowAiTraining],
         ...(safeMaxFee || safePriorityFee ? { maxFeePerGas: safeMaxFee, maxPriorityFeePerGas: safePriorityFee } : {}),
       })
       const receipt = await waitForTransactionReceipt(config, { hash: txHash })
@@ -173,6 +181,7 @@ export default function RegisterPage() {
       else if (message.includes('user rejected') || message.includes('User rejected')) message = 'Transaction was rejected in your wallet.'
       else if (message.includes('insufficient funds')) message = 'Insufficient ETH for gas. Get free testnet ETH from the Lampros DAO Faucet.'
       setError(message); setStep(2)
+      toast.error(`Registration failed: ${message}`)
     } finally { setSigning(false) }
   }
 
@@ -183,15 +192,26 @@ export default function RegisterPage() {
   }
 
   return (
-    <section className="max-w-[1280px] mx-auto px-5 pt-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-extrabold mb-1 text-[var(--text)]">Register Content</h1>
-        <p className="text-sm text-[var(--text-3)]">Upload a file to fingerprint and register its authenticity on-chain</p>
-      </div>
+    <section>
+      <PageHero eyebrow="CREATE AN IMMUTABLE RECORD" title="Make ownership undeniable." description="Generate a durable proof for media or text, then anchor the evidence to Arbitrum. Your original stays identifiable wherever it goes." icon={FilePlus} />
+      <div className="max-w-[1280px] mx-auto px-5 pt-7">
+
+      {/* Faucet notice — shown when wallet is connected */}
+      {isConnected && (
+        <div className="mb-5 flex items-center gap-3 px-4 py-3 rounded-2xl border border-[var(--arb-border)] bg-[var(--arb-bg)]">
+          <AlertTriangle size={15} className="text-[#12AAFF] flex-shrink-0" />
+          <p className="text-xs text-[var(--text-2)] leading-relaxed">
+            Registration requires a small amount of testnet ETH for gas.{' '}
+            <a href="https://faucet.lamprosdao.com/" target="_blank" rel="noopener noreferrer" className="text-[#12AAFF] font-semibold hover:underline inline-flex items-center gap-1">
+              Get free ETH from the Lampros DAO Faucet <ExternalLink size={10} />
+            </a>
+          </p>
+        </div>
+      )}
 
       <StepIndicator steps={['Upload File', 'Generate Hashes', 'Sign & Register', 'Confirmed']} currentStep={step} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mt-6">
         <div className="flex flex-col gap-5">
           <SpotlightCard>
             <Card className="card-hover-glow">
@@ -201,19 +221,22 @@ export default function RegisterPage() {
                 </CardTitle>
               </CardHeader>
               <CardBody className="flex flex-col gap-4">
-                <div className="flex bg-[var(--bg-2)] p-1 rounded-xl border border-[var(--border)]">
-                  <button onClick={() => { setInputType('media'); setFile(null); setStep(1); setHashes(null); setError(null) }} className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition-colors ${inputType === 'media' ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-3)] hover:text-[var(--text-2)]'}`}><FileText size={16} /> Media File</button>
-                  <button onClick={() => { setInputType('text'); setFile(null); setStep(1); setHashes(null); setError(null) }} className={`flex-1 flex items-center justify-center gap-2 py-2 text-sm font-semibold rounded-lg transition-colors ${inputType === 'text' ? 'bg-[var(--surface)] text-[var(--text)] shadow-sm' : 'text-[var(--text-3)] hover:text-[var(--text-2)]'}`}><Type size={16} /> Text Article</button>
-                </div>
-                {inputType === 'media' ? (
-                  <FileUpload onFileSelected={handleFileSelected} label="Drop your file here to prepare for registry" />
-                ) : (
-                  <div className="flex flex-col gap-2">
+                <Tabs value={inputType} onValueChange={(val) => { setInputType(val); setFile(null); setStep(1); setHashes(null); setError(null) }} className="w-full">
+                  <TabsList className="grid w-full grid-cols-2 mb-4 bg-[var(--bg-2)] border border-[var(--border)] rounded-xl">
+                    <TabsTrigger value="media" className="data-[state=active]:bg-[var(--surface)] rounded-lg py-1.5"><FileText size={16} className="mr-2" /> Media File</TabsTrigger>
+                    <TabsTrigger value="text" className="data-[state=active]:bg-[var(--surface)] rounded-lg py-1.5"><Type size={16} className="mr-2" /> Text Article</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="media">
+                    <FileUpload onFileSelected={handleFileSelected} label="Drop an original to begin its proof" />
+                  </TabsContent>
+                  
+                  <TabsContent value="text" className="flex flex-col gap-2 mt-0">
                     <textarea className="w-full h-32 p-3 bg-[var(--bg-2)] border border-[var(--border)] rounded-xl text-sm focus:border-[#12AAFF] focus:outline-none resize-none" placeholder="Paste your article or text content here to register it on the blockchain..." value={textContent} onChange={(e) => setTextContent(e.target.value)} />
                     <div className="text-[10px] text-[var(--text-3)] text-right">{textContent.length} characters</div>
                     <Button onClick={() => handleFileSelected(file)} disabled={!textContent.trim()}>Generate Hash</Button>
-                  </div>
-                )}
+                  </TabsContent>
+                </Tabs>
               </CardBody>
             </Card>
           </SpotlightCard>
@@ -229,8 +252,8 @@ export default function RegisterPage() {
                   <CardBody className="flex flex-col gap-3">
                     {processing ? (
                       <div className="p-3 rounded-xl bg-[var(--bg-2)] border border-[var(--border)]">
-                        <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-3)] mb-1.5">SHA-256 CRYPTOGRAPHIC HASH</div>
-                        <div className="skeleton h-9 rounded-lg w-full" />
+                        <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-3)] mb-2">SHA-256 CRYPTOGRAPHIC HASH</div>
+                        <Skeleton className="h-9 rounded-lg w-full bg-[var(--border)]" />
                       </div>
                     ) : (
                       <>
@@ -286,7 +309,7 @@ export default function RegisterPage() {
                 <AnimatePresence mode="wait">
                   {step < 2 && !processing && (
                     <motion.div key="waiting" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                      <Alert variant="info">Upload a file first. We'll compute its SHA-256 fingerprint via the hash engine, then you can register it on Arbitrum Sepolia.</Alert>
+                      <Alert variant="info">Start with an original. We’ll generate its fingerprints locally, then prepare an immutable Arbitrum registration.</Alert>
                     </motion.div>
                   )}
 
@@ -316,7 +339,7 @@ export default function RegisterPage() {
 
                   {step === 2 && !processing && (
                     <motion.div key="ready" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="flex flex-col gap-4">
-                      <Alert variant="success">Fingerprints computed. Click below to sign a transaction and register on-chain.</Alert>
+                      <Alert variant="success">Evidence is ready. Review the record, then sign once to publish your proof on-chain.</Alert>
 
                       <div>
                         <label className="text-xs font-semibold text-[var(--text-3)] block mb-1.5 flex items-center gap-1"><Bot size={12} /> AI Generator Attribution</label>
@@ -338,10 +361,11 @@ export default function RegisterPage() {
                         <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-3)] mb-2 flex items-center gap-1.5"><ArbitrumLogo size={12} /> Transaction Preview</div>
                         <div className="flex flex-col gap-1.5 text-xs">
                           <TxRow label="Contract" value="VeriTraceRegistry" accent />
-                          <TxRow label="Method" value="registerContent(bytes32, uint64, string, string)" />
+                          <TxRow label="Method" value="registerContent(bytes32, uint64, string, string, bool)" />
                           <TxRow label="SHA-256" value={`0x${hashes.sha256?.slice(0, 12)}...`} mono />
                           <TxRow label="Network" value="Arbitrum Sepolia" />
                           <TxRow label="AI Tool" value={aiTool || '(none)'} />
+                          <TxRow label="Allow AI" value={allowAiTraining ? 'Yes' : 'No'} />
                         </div>
                       </div>
 
@@ -390,13 +414,12 @@ export default function RegisterPage() {
                     </motion.div>
                   )}
                 </AnimatePresence>
-                {error && <div className="mt-3"><Alert variant="danger">{error}</Alert></div>}
               </CardBody>
             </Card>
           </SpotlightCard>
 
           <Card className="card-hover-glow">
-            <CardHeader><CardTitle>What gets stored?</CardTitle></CardHeader>
+              <CardHeader><CardTitle>Where your proof lives</CardTitle></CardHeader>
             <CardBody className="text-xs leading-relaxed text-[var(--text-2)]">
               <div className="flex flex-col gap-3">
                 <InfoRow label="On-Chain" color="#12AAFF" items={['SHA-256 hash (bytes32)', 'Wallet address (msg.sender)', 'Block timestamp', 'AI tool attribution']} />
@@ -406,6 +429,7 @@ export default function RegisterPage() {
             </CardBody>
           </Card>
         </div>
+      </div>
       </div>
     </section>
   )

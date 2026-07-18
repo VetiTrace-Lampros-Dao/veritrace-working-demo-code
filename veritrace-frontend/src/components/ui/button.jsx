@@ -1,4 +1,5 @@
 import { forwardRef } from 'react'
+import { motion } from 'framer-motion'
 import { cva } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
 
@@ -36,10 +37,11 @@ const variantStyles = {
 
 export const Button = forwardRef(({ className, variant, size, style, ...props }, ref) => {
   return (
-    <button
+    <motion.button
       ref={ref}
       className={cn(buttonVariants({ variant, size }), className)}
       style={{ ...variantStyles[variant], ...style }}
+      whileTap={{ scale: 0.98 }}
       {...props}
     />
   )

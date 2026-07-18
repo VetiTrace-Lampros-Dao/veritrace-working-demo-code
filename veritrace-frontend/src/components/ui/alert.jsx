@@ -1,5 +1,6 @@
 import { TriangleAlert as AlertTriangle, CircleCheck as CheckCircle2, Info, Circle as XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { motion } from 'framer-motion'
 
 const icons = { info: Info, success: CheckCircle2, warning: AlertTriangle, danger: XCircle }
 const styles = {
@@ -12,9 +13,9 @@ const styles = {
 export function Alert({ variant = 'info', children, className }) {
   const Icon = icons[variant] || Info
   return (
-    <div className={cn('flex gap-3 p-3.5 rounded-xl border text-sm leading-relaxed', styles[variant], className)}>
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ type: 'spring', stiffness: 220, damping: 20 }} className={cn('flex gap-3 p-3.5 rounded-xl border text-sm leading-relaxed', styles[variant], className)}>
       <Icon size={18} className="flex-shrink-0 mt-0.5" />
       <div className="flex-1">{children}</div>
-    </div>
+    </motion.div>
   )
 }
