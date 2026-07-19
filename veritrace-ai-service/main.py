@@ -122,6 +122,19 @@ async def embed_text(payload: TextPayload):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/api/v1/embed_text_clip")
+async def embed_text_clip(payload: TextPayload):
+    try:
+        # generate the dense 512-dimensional semantic embedding for text using CLIP
+        embedding = model.encode(payload.text)
+        embedding_list = embedding.tolist()
+        
+        return {
+            "semantic_hash": embedding_list
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/api/v1/compare")
 async def compare_images(file1: UploadFile = File(...), file2: UploadFile = File(...)):
     try:
