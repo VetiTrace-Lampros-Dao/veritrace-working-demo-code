@@ -28,6 +28,7 @@ export default function EnterprisePage() {
 
   const [mediaType, setMediaType] = useState('image')
   const [quantity, setQuantity] = useState(100)
+  const [searchQuery, setSearchQuery] = useState('')
   
   const [querying, setQuerying] = useState(false)
   const [datasetData, setDatasetData] = useState(null)
@@ -44,7 +45,10 @@ export default function EnterprisePage() {
     setDatasetData(null)
     setPurchaseSuccess(false)
     try {
-      const res = await fetch(`${CORE_BACKEND_API}/api/v1/enterprise/dataset?type=${mediaType}&quantity=${quantity}`)
+      let url = `${CORE_BACKEND_API}/api/v1/enterprise/dataset?type=${mediaType}&quantity=${quantity}`
+      if (searchQuery) url += `&query=${encodeURIComponent(searchQuery)}`
+      
+      const res = await fetch(url)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to query dataset')
       setDatasetData(data)
@@ -203,6 +207,19 @@ export default function EnterprisePage() {
                       className="w-full px-3.5 py-2.5 text-sm rounded-xl bg-[var(--bg-2)] border border-[var(--border)] text-[var(--text)] outline-none focus:border-[#12AAFF]"
                       min="1"
                     />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-[var(--text-3)] block mb-1.5">Semantic Search Prompt (Optional)</label>
+                    <input 
+                      type="text" 
+                      value={searchQuery} 
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder='e.g. "cyberpunk cityscapes" or "rainy weather"'
+                      className="w-full px-3.5 py-2.5 text-sm rounded-xl bg-[var(--bg-2)] border border-[var(--border)] text-[var(--text)] outline-none focus:border-[#12AAFF]"
+                    />
+                    <p className="text-[10px] text-[var(--text-3)] mt-1.5 leading-relaxed">
+                      Powered by AI vector search. Leave blank to fetch a random selection.
+                    </p>
                   </div>
                   
                   <Button variant="primary" size="lg" className="w-full mt-2" onClick={handleQuery} disabled={querying}>
